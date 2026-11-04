@@ -9,7 +9,7 @@
 |---|---|---|
 | A1 工程基建 | T01 / T02 / T03 | ✅ 通过（health UP、404 走 handler、参数 400、seed 入库） |
 | A2 登录鉴权 | T04 | ✅ 通过（注册/登录/刷新保持/登出/改名改密/锁定） |
-| A3 题库只读 | T05 / T06 / T07 | 🚧 进行中 |
+| A3 题库只读 | T05 / T06 / T07 | 🚧 T05 ✅ / T06 ✅ / T07 后端 ✅、前端未开始（暂停断点） |
 
 ## 卡片记录
 
@@ -136,6 +136,35 @@
 - `npm run lint`、`npm run build` 绿（1839 modules）
 
 **说明**：联调用的临时数据（q1 题干代码块/XSS、q1/q2 发布、q2 分类临时改 1、practice_record 3 条、view_count）已全部还原为 seed 原状。
+
+### T07 · 首页聚合 🚧（后端已完成并提交；前端未开始）
+
+**已完成（后端）**
+- 改动文件：`home/{HomeController,HomeService,HomeMapper}.java`、`home/vo/HomeResp.java`（06 清单外新增 HomeMapper，已登记 02 §10）
+- 实现：`GET /api/v1/home`；categories（只返 status=1，questionCount 只算发布态）、latest ≤6（published_at DESC,id DESC）、hot ≤6（practice_count DESC,id DESC）、continueLearning 仅登录返回最近 3 条（每题取最新自评档位，未登录 null）；三块 SQL 分别 try/catch，任一块失败只该字段为空并记 ERROR，不整体 500；标签 IN 批量补全无 N+1
+
+**已验收（真实输出，2026-11-05；临时数据，验完已还原）**
+- 游客 `GET /home` → HTTP 200，`continueLearning=null`，`latest`/`hot` 各 2 条（临时只发布 2 题），`categories[0].questionCount=2`、其余 0
+- 登录 admin 后 `GET /home` → `continueLearning` 数组（最近自评：q2 `lastAssess=3`、q1 `lastAssess=1`，按时间倒序，id 为字符串）
+- 草稿/下架题不出现在 latest/hot；分块降级实测（A 用临时 RENAME TABLE）→ HTTP 200 + 三块为空 + ERROR 日志
+- `/questions`、`/questions/{id}`、`/questions/{id}/neighbors`、`/categories`、`/tags`、`/home` 公开访问均 200；detail 的 myFavorite=false/myAssessment=null（游客）、草稿 40400、view_count 异步 +1
+
+**未完成（暂停断点）**
+- 前端 `views/Home.vue` + `api/home.js` + `router` 的 `/` 一行替换（task-11 未开始）
+- A3 检查点浏览器全链路验收（首页有内容 → 分类进列表 → 详情 → 展开答案代码高亮 → 注册/登录 → 刷新保持）
+- T07 前端验收项：骨架、空库 EmptyState「题库建设中」+管理员「去录题」、分块 ErrorState、游客不显示继续刷、375 宽布局
+
+---
+
+## 暂停断点（2026-11-05 00:52，站长要求暂停）
+
+- **已完成并提交**：T01、T02、T03、T04、T05、T06（T06 前端 `cef1e8b`）、T07 后端（本 commit）。
+- **未开始**：T07 前端（Home.vue / api/home.js / router `/` 一行）、A3 检查点浏览器验收。
+- **数据库现场**：已还原 seed 原状——`question` 3 道全草稿（status=0、published_at NULL、view/practice=0）、`category` 5、`tag` 15、`question_tag` 6、`user` 仅 admin、`practice_record`/`user_favorite`/`wrong_record` 均为 0。
+- **进程现场**：8080 / 8081 / 5173 均无监听；无 java/mvn 残留；后台 job 已全部终止。
+- **工作区现场**：本 commit 后 `git status` 干净（application-local.yml / target / logs / dist / node_modules 均为 gitignore）。
+- **恢复顺序**：读本文件 → 派 `frontend-dev` 做 T07 前端（数据联调时临时发布 1–2 题，验完还原）→ Lead 做 A3 浏览器全链路验收 → commit T07 → 更新检查点 A3 → 按 `07` 交接块进入会话 B（T08–T13）。
+- **交接提示**：T07 后端代码已随本 commit 入库；启动方式见 `README.md`（`cd backend && mvn spring-boot:run`、`cd frontend && npm run dev`，Node 用 `D:\Develop\nodejs`）；管理员 `admin/123456`。
 
 
 
