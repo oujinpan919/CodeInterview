@@ -35,7 +35,7 @@ const routes = [
   {
     path: '/question/:id',
     name: 'question-detail',
-    component: pendingView('QuestionDetail', '题目详情'),
+    component: () => import('@/views/QuestionDetail.vue'),
     meta: { title: '题目详情', requiresAuth: false, requiresAdmin: false }
   },
   {

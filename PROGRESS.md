@@ -119,4 +119,23 @@
 
 **说明**：`question/{Controller,Service,Mapper}.java` 与 `QuestionMapper.xml` 是 T05/T06 共用文件，T05 提交时已包含 T06 的只读详情实现（同文件无法按卡拆分，已在 02 §10 登记）。
 
+### T06 · 题目详情 + Markdown 渲染链 ✅（前端）
+
+**改动文件（本卡提交只含前端；后端 question 三件套随 T05 提交）**
+- `frontend/src/views/QuestionDetail.vue`、`components/MarkdownView.vue`、`composables/useMarkdown.js`、`assets/styles/markdown.css`、`api/question.js`（详情）、`router/index.js`（仅 `/question/:id` 一行）
+
+**验收（真实输出，2026-11-05，headless Edge/CDP + 真实接口临时数据）**
+- 详情：面包屑「题库 / Java / 题目」、H1、meta（难度/分类/浏览/已练）、标签；答案默认折叠，点击「展开参考答案 ▾」展开，刷新回到折叠
+- Shiki：题干 Java 围栏代码块渲染出 `.shiki` 与 22 个着色 span；未注册语言/异常退化 `<pre><code>`（模块级验证 `md-code-fallback`）
+- XSS：临时在 q1 题干加入 `<script>alert("xss")</script>`、`<img src=x onerror=...>` → DOM 中 `script`=0、`[onerror]`=0，innerHTML 无 `<script`/`onerror`
+- 外链 hook：输出含 `target="_blank" rel="noopener noreferrer"`；`javascript:` 被清洗
+- 浏览计数：连续刷新详情 3 次显示 10→11→12（后端异步 +1 生效）
+- 上下题：q1 上一题禁用、下一题 → q2；q2 上一题 → q1、下一题禁用；草稿 `/question/3` → 40400 原地渲染 `NotFound`（URL 不变、不跳路由）
+- 375×667：无横向滚动；H1 24px；展开/上下题按钮高 ≥44px
+- 首屏 gzip ≈87KB；Shiki 919KB（gzip 264KB）为详情页异步 chunk，不进首屏
+- `npm run lint`、`npm run build` 绿（1839 modules）
+
+**说明**：联调用的临时数据（q1 题干代码块/XSS、q1/q2 发布、q2 分类临时改 1、practice_record 3 条、view_count）已全部还原为 seed 原状。
+
+
 

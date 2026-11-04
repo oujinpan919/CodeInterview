@@ -5,3 +5,8 @@ import request from '@/utils/request'
 export function getQuestions(params) {
   return request.get('/questions', { params })
 }
+
+/** 详情（04 A3.3 #9）：一次返回 question / myFavorite / myAssessment / neighbors */
+export function getQuestionDetail(id) {
+  return request.get(`/questions/${id}`)
+}
