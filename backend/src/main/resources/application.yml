@@ -56,3 +56,18 @@ logging:
 
 admin:
   init-password: ${ADMIN_INIT_PASSWORD:}
+
+# Sa-Token（02 §5.4）：内存会话，token 只读请求头 satoken（不读 Cookie）
+sa-token:
+  token-name: satoken
+  timeout: 604800
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false
+  is-read-header: true
+  is-read-cookie: false
+  token-style: uuid
+
+# 注册开关（01 F01：可关闭；关闭后注册返回 40300）
+app:
+  register-enabled: true
