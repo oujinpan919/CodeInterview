@@ -10,7 +10,9 @@ spring:
   profiles:
     default: local
   datasource:
-    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${MYSQL_DATABASE:codeinterview}?characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    # characterEncoding 只能写 Java 字符集名：UTF-8 会映射到库端 utf8mb4；
+    # 照 02 §6.2 写 utf8mb4 会让 Connector/J 抛 Unsupported character encoding（已登记 02 §10）
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${MYSQL_DATABASE:codeinterview}?characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USERNAME:codeinterview}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver

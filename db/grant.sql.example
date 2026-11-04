@@ -1,0 +1,16 @@
+-- ============================================================
+-- 码上记 CodeInterview · 数据库账号与授权模板
+-- 用法：复制为 db/grant.sql（已被 .gitignore 忽略），填入应用账号密码后由 root 执行：
+--   "D:\Develop\MySQL\MySQLServer8.0\bin\mysql.exe" -uroot -p < db/grant.sql
+-- 注意：本文件是提交到仓库的模板，密码位必须留空，禁止写入真实密码。
+-- ============================================================
+
+CREATE DATABASE IF NOT EXISTS `codeinterview`
+  DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+CREATE USER IF NOT EXISTS 'codeinterview'@'localhost' IDENTIFIED BY '';
+CREATE USER IF NOT EXISTS 'codeinterview'@'127.0.0.1' IDENTIFIED BY '';
+
+GRANT ALL PRIVILEGES ON `codeinterview`.* TO 'codeinterview'@'localhost';
+GRANT ALL PRIVILEGES ON `codeinterview`.* TO 'codeinterview'@'127.0.0.1';
+FLUSH PRIVILEGES;

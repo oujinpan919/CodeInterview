@@ -1,0 +1,32 @@
+# 码上记 CodeInterview · MySQL 8.4 容器备选（仅供换机器复现时使用）
+# 本机主路径是已安装的 MySQL80（3306），默认不要启动本容器。
+#   启动：cd docker && docker compose up -d mysql
+#   应用连接：DB_PORT=3307（或在 backend/config/application-local.yml 里改端口）
+# 3306 已被本机 MySQL80 占用，容器必须映射 3307，避免两个实例冲突。
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: codeinterview-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-codeinterview}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ../db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql-data:
