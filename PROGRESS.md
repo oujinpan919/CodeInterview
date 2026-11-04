@@ -101,3 +101,22 @@
 
 **偏离登记**：见 `开发文档/02 §10`（`/favorites` 401 与管理端 40301 验收顺延；个人中心「注册时间」无接口来源显示「—」；密码递增阈值前后端统一为 ≥7）。
 
+### T05 · 分类/标签 + 题目列表 ✅
+
+**改动文件**
+- 后端：`taxonomy/{CategoryController,CategoryService,CategoryMapper,TagController,TagService,TagMapper}.java`、`taxonomy/vo/{CategoryResp,TagResp}.java`、`question/{QuestionController,QuestionService,QuestionMapper}.java`、`question/dto/QuestionQueryReq.java`、`question/vo/{QuestionBriefResp,TagBriefResp,QuestionTagRow}.java`、`resources/mapper/QuestionMapper.xml`
+- 前端：`api/{taxonomy,question}.js`、`composables/usePagination.js`、`components/{QuestionCard,DifficultyTag,PageBar,EmptyState,ErrorState}.vue`、`views/QuestionList.vue`、`router/index.js`（仅 `/question` 组件替换）
+
+**验收（真实输出，2026-11-05）**
+- `GET /questions?page=1&pageSize=10` → `{page:1,size:10,total:2,pages:1,list:[...]}`，`id` 均为字符串；列表项无 `answerMd`
+- `GET /questions?pageSize=500` → 实际 `size=50`
+- `GET /questions?keyword=HashMap` → total=1；`?keyword=%25`（`%`）→ total=0、HTTP 200 不报错
+- `?sort=hot` → practice_count 5/2 降序；`?sort=xxx` 回落 latest
+- `?categoryId=1&difficulty=2` → 命中 2 条（临时数据）
+- `GET /categories` → 5 条，`questionCount` 只算发布态（Java=2，其余 0）；`GET /tags` → 15 条含 0 题标签
+- 前端（headless Edge/CDP）：首屏 2 卡（标题/难度/分类/标签/浏览/已练）；URL 还原筛选；筛选写 URL 且 `router.replace` 不增历史栈；300ms 防抖实测；刷新保持；骨架屏 6 条；ErrorState+重试；失败时保留旧数据+顶部细条；分页（CDP mock 25 条/3 页）与 `status=2` 置灰；375×667 无横向滚动、搜索/排序/筛选按钮高 44、底部筛选抽屉 + chips 可清除
+- `npm run lint`、`npm run build` 绿（1743 modules，列表 chunk gzip 22.79 kB）
+
+**说明**：`question/{Controller,Service,Mapper}.java` 与 `QuestionMapper.xml` 是 T05/T06 共用文件，T05 提交时已包含 T06 的只读详情实现（同文件无法按卡拆分，已在 02 §10 登记）。
+
+

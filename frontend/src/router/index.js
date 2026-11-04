@@ -29,7 +29,7 @@ const routes = [
   {
     path: '/question',
     name: 'question-list',
-    component: pendingView('QuestionList', '题库'),
+    component: () => import('@/views/QuestionList.vue'),
     meta: { title: '题库', requiresAuth: false, requiresAdmin: false }
   },
   {
