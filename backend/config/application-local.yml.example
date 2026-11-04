@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    username: codeinterview
+    password:
+admin:
+  init-password:
+ai:
+  api-key:

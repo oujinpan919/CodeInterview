@@ -1,46 +1,23 @@
-# Dependencies
-node_modules/
-__pycache__/
-*.pyc
-.venv/
-venv/
-env/
-
-# Build output
-dist/
-build/
-.next/
-out/
-*.tsbuildinfo
-
-# Environment variables
+# 密钥文件：只留模板
+backend/config/application-local.yml
+!backend/config/application-local.yml.example
+# 建库/授权脚本：含应用账号密码，只留模板
+db/grant.sql
+!db/grant.sql.example
 .env
-.env.local
-.env.*.local
-
-# IDE / Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs
+.env.*
+!.env.example
+# 构建与日志
+logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+backend/target/
+frontend/node_modules/
+frontend/dist/
+.idea/
+*.iml
+.DS_Store
 
-# Testing
-coverage/
-.nyc_output/
-
-# Misc
-.cache/
-.temp/
-tmp/
+# 前端构建期环境变量只含 VITE_API_BASE（无密钥），
+# 上面的 .env.* 会误伤，这里显式放行（04 / T01 要求提交）。
+!frontend/.env.development
+!frontend/.env.production
