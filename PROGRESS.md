@@ -9,7 +9,7 @@
 |---|---|---|
 | A1 工程基建 | T01 / T02 / T03 | ✅ 通过（health UP、404 走 handler、参数 400、seed 入库） |
 | A2 登录鉴权 | T04 | ✅ 通过（注册/登录/刷新保持/登出/改名改密/锁定） |
-| A3 题库只读 | T05 / T06 / T07 | 🚧 T05 ✅ / T06 ✅ / T07 后端 ✅、前端未开始（暂停断点） |
+| A3 题库只读 | T05 / T06 / T07 | ✅ 通过（首页/列表/详情/代码高亮/登录/刷新保持，浏览器实测） |
 
 ## 卡片记录
 
@@ -137,34 +137,61 @@
 
 **说明**：联调用的临时数据（q1 题干代码块/XSS、q1/q2 发布、q2 分类临时改 1、practice_record 3 条、view_count）已全部还原为 seed 原状。
 
-### T07 · 首页聚合 🚧（后端已完成并提交；前端未开始）
+### T07 · 首页聚合 ✅
 
-**已完成（后端）**
+**已完成（后端，随本卡后端 commit）**
 - 改动文件：`home/{HomeController,HomeService,HomeMapper}.java`、`home/vo/HomeResp.java`（06 清单外新增 HomeMapper，已登记 02 §10）
 - 实现：`GET /api/v1/home`；categories（只返 status=1，questionCount 只算发布态）、latest ≤6（published_at DESC,id DESC）、hot ≤6（practice_count DESC,id DESC）、continueLearning 仅登录返回最近 3 条（每题取最新自评档位，未登录 null）；三块 SQL 分别 try/catch，任一块失败只该字段为空并记 ERROR，不整体 500；标签 IN 批量补全无 N+1
 
-**已验收（真实输出，2026-11-05；临时数据，验完已还原）**
-- 游客 `GET /home` → HTTP 200，`continueLearning=null`，`latest`/`hot` 各 2 条（临时只发布 2 题），`categories[0].questionCount=2`、其余 0
-- 登录 admin 后 `GET /home` → `continueLearning` 数组（最近自评：q2 `lastAssess=3`、q1 `lastAssess=1`，按时间倒序，id 为字符串）
-- 草稿/下架题不出现在 latest/hot；分块降级实测（A 用临时 RENAME TABLE）→ HTTP 200 + 三块为空 + ERROR 日志
-- `/questions`、`/questions/{id}`、`/questions/{id}/neighbors`、`/categories`、`/tags`、`/home` 公开访问均 200；detail 的 myFavorite=false/myAssessment=null（游客）、草稿 40400、view_count 异步 +1
+**已完成（前端）**
+- 改动文件：`frontend/src/views/Home.vue`、`frontend/src/api/home.js`、`router/index.js`（仅 `/` 一行）
+- 结构：Hero（标题/副标题/一句话/两个按钮 + 装饰插画）→ 分类 5 卡自适应 → 最新/热门双栏 → 登录后「继续刷」3 卡；「查看全部」补充入口
+- 状态：Hero+双栏骨架；空库 EmptyState「题库建设中」+ 管理员「去录题」；`latest`/`hot`/`continueLearning` 分块 ErrorState，整页请求失败有整页 ErrorState + 重试；游客不显示继续刷
+- 视觉：全部走 04 B6 token（主色 #2563eb / 圆角 12·8·4 / 字号 H1 28·36 / 断点 320·768·1024·1280），无新依赖/字体/硬编码色值；375×667 无横向滚动、分类 2 列、双栏单列、继续刷横滑
 
-**未完成（暂停断点）**
-- 前端 `views/Home.vue` + `api/home.js` + `router` 的 `/` 一行替换（task-11 未开始）
-- A3 检查点浏览器全链路验收（首页有内容 → 分类进列表 → 详情 → 展开答案代码高亮 → 注册/登录 → 刷新保持）
-- T07 前端验收项：骨架、空库 EmptyState「题库建设中」+管理员「去录题」、分块 ErrorState、游客不显示继续刷、375 宽布局
+**验收（真实输出，2026-11-05，headless Edge/CDP + Lead 浏览器实测）**
+- 游客 `/home` → HTTP 200，`continueLearning=null`，latest/hot 各 3 条（临时 3 题），分类题数 1/1/1/0/0
+- 登录 admin 后 `/home` → `continueLearning` 3 条真实数据：Redis「不会」17:51 / MySQL「模糊」17:41 / HashMap「掌握」17:31，按时间倒序
+- 分块降级：CDP mock 单块 null → 只该块 ErrorState，其余块正常；整页失败 → 整页 ErrorState + 重试恢复
+- 空库（mock）：EmptyState「题库建设中」，游客无按钮，管理员「去录题」→ `/admin/questions/edit`
+- 375×667：Hero 按钮上下整宽、分类 2 列、双栏单列、继续刷横滑、无横向滚动；`npm run lint`/`npm run build` 绿（1842 modules，Home chunk gzip 6.06 kB）
+
+### A3 检查点（浏览器全链路，Lead 实测）✅
+
+- 打开 `http://localhost:5173` → 首页：Hero + 5 分类（Java/MySQL/Redis 各 1 题）+ 最新/热门各 3 条 + 页脚；未登录显示「登录」
+- 点 Java 分类 → `/question?categoryId=1`：筛选栏 Java 选中、搜索/排序正常、「共 1 题」、卡片可见
+- 点卡片 → `/question/1`：面包屑/H1/meta/标签/题干完整；点「展开参考答案 ▾」→ 答案展开（按钮变「收起 ▴」）；题干 Java 代码块 **Shiki 着色正常**（截图留档）
+- 点「登录」→ `/login` 整屏卡片无 Header/Footer；admin/123456 登录成功 → 回首页；Header 显示账号菜单（个人中心/刷题记录/**管理端**/退出登录），「继续刷」3 卡出现
+- `Ctrl+R` 刷新 → 仍为登录态（账号菜单 + 继续刷保持），验证 sessionStorage + fetchMe
+- 数据为临时发布 3 题 + admin 3 条自评记录，验证后已还原 seed 原状
 
 ---
 
-## 暂停断点（2026-11-05 00:52，站长要求暂停）
+## 【交接 · 会话 A】
 
-- **已完成并提交**：T01、T02、T03、T04、T05、T06（T06 前端 `cef1e8b`）、T07 后端（本 commit）。
-- **未开始**：T07 前端（Home.vue / api/home.js / router `/` 一行）、A3 检查点浏览器验收。
-- **数据库现场**：已还原 seed 原状——`question` 3 道全草稿（status=0、published_at NULL、view/practice=0）、`category` 5、`tag` 15、`question_tag` 6、`user` 仅 admin、`practice_record`/`user_favorite`/`wrong_record` 均为 0。
-- **进程现场**：8080 / 8081 / 5173 均无监听；无 java/mvn 残留；后台 job 已全部终止。
-- **工作区现场**：本 commit 后 `git status` 干净（application-local.yml / target / logs / dist / node_modules 均为 gitignore）。
-- **恢复顺序**：读本文件 → 派 `frontend-dev` 做 T07 前端（数据联调时临时发布 1–2 题，验完还原）→ Lead 做 A3 浏览器全链路验收 → commit T07 → 更新检查点 A3 → 按 `07` 交接块进入会话 B（T08–T13）。
-- **交接提示**：T07 后端代码已随本 commit 入库；启动方式见 `README.md`（`cd backend && mvn spring-boot:run`、`cd frontend && npm run dev`，Node 用 `D:\Develop\nodejs`）；管理员 `admin/123456`。
+- **已完成**：T01–T07（A1=T01-T03、A2=T04、A3=T05-T07 全部检查点通过）
+- **提交记录**（`git log --oneline -8`）：
+  ```
+  <本卡前端 commit> feat(T07): 首页聚合（前端）
+  b0c06a7 feat(T07): 首页聚合（后端，前端待续）
+  cef1e8b feat(T06): 题目详情 + Markdown 渲染链（前端）
+  2f2fa11 feat(T05): 分类/标签 + 题目列表（筛选/排序/分页）
+  c3cf51c feat(T04): 登录鉴权闭环（昵称即登录名）
+  5c2130c feat(T03): 数据库初始化与 seed、管理员初始化
+  70f5b5b feat(T02): 后端骨架与统一返回
+  9d23bc7 feat(T01): 前端脚手架与工程规范
+  ```
+- **文档偏离**：见 `开发文档/02 §10`（JDBC characterEncoding、Jackson 只转 Long、密码递增阈值、验收顺序顺延、共用文件提交粒度、T05/T06/T07 辅助类等 12 条）
+- **已知问题**：
+  1. T07 前端「看看我的错题」指向 `/wrong-book`（游客经守卫跳登录），与 07 提示词里「Hero 按钮跳 /question」不同；按 04 B4.1 按钮语义实现，待站长确认。
+  2. 个人中心「注册时间」无接口来源，显示「—」。
+  3. `/favorites` 无 token 401、管理端 40301 分别顺延到 T08/T12 验证。
+  4. 首页「继续刷」在无自评记录时不显示该区块（04 未要求空态）。
+  5. 单测：本会话尚未写（06 规定单测随 T14/T15/T18 落地，T20 全量回归）。
+- **测试**：`mvn -q -DskipTests package` 通过；`npm run lint`、`npm run build` 绿；`mvn -q test` 当前为 0 tests（符合本会话范围）。
+- **PROGRESS.md**：已更新到 T07（本文件）。
+- **恢复起点（会话 B）**：T08 收藏；数据从 seed 3 草稿题 + admin 开始，按 07「会话 B」提示词执行 T08–T13。
+
 
 
 

@@ -23,7 +23,7 @@ const routes = [
   {
     path: '/',
     name: 'home',
-    component: pendingView('Home', '首页'),
+    component: () => import('@/views/Home.vue'),
     meta: { title: '首页', requiresAuth: false, requiresAdmin: false }
   },
   {
