@@ -71,3 +71,34 @@ sa-token:
 # 注册开关（01 F01：可关闭；关闭后注册返回 40300）
 app:
   register-enabled: true
+
+# AI 助手（05 §7）。Key 只来自 spring.config.import 加载的 config/application-local.yml
+# 或环境变量 AI_API_KEY（环境变量优先级更高）；本文件不得出现真实 Key。
+ai:
+  enabled: ${AI_ENABLED:true}
+  provider: ${AI_PROVIDER:spark}
+  base-url: ${AI_BASE_URL:https://maas-api.cn-huabei-1.xf-yun.com/v2}
+  model: ${AI_MODEL:spark-x2.6}
+  api-key: ${AI_API_KEY:}
+  thinking-enabled: false
+  connect-timeout-ms: 5000
+  first-token-timeout-ms: 20000
+  idle-timeout-ms: 45000
+  total-timeout-ms: 180000
+  max-tokens: 1200
+  temperature: 0.3
+  max-messages: 10
+  max-chars: 6000
+  max-single-chars: 2000
+  system-prompt-file: classpath:prompt/system.txt
+  quota:
+    user-daily: ${AI_USER_DAILY:30}
+    site-daily: ${AI_SITE_DAILY:300}
+  limit:
+    user-concurrency: 1
+    site-concurrency: 4
+    min-interval-ms: 3000
+  pool:
+    core-size: 4
+    max-size: 8
+    queue-capacity: 20

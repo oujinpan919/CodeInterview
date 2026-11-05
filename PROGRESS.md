@@ -396,6 +396,30 @@
 - **PROGRESS.md**：已更新到 B2。
 - **恢复起点（会话 C）**：T14 mock 上游 + 上游客户端；DB 为 seed 3 草稿题 + admin（与 A 段交接一致），AI Key 留空、全程 mock profile。
 
+---
+
+## 【会话 C】任务卡记录（T14–T20）
+
+### T14 · mock 上游 + 上游客户端 ✅
+
+**改动文件**
+- 后端（新增）：`ai/{AiProperties,LlmStreamClient,UpstreamSseParser,PromptBuilder,UpstreamMsg}.java`、`mock/MockUpstreamServer.java`、`chat/dto/Msg.java`
+- 后端（配置）：`resources/application.yml`（追加 `ai.*`）、`resources/application-mock.yml`、`resources/prompt/system.txt`
+- 单测（新增）：`test/.../ai/UpstreamSseParserTest.java`、`test/.../support/MockUpstreamServerTest.java`
+
+**验收（真实输出，2026-11-05）**
+- `mvn -q -DskipTests compile` → exit 0
+- `mvn -q test -Dtest=UpstreamSseParserTest,MockUpstreamServerTest` → exit 0；`UpstreamSseParserTest Tests run: 8, Failures: 0, Errors: 0` + `MockUpstreamServerTest Tests run: 10, Failures: 0, Errors: 0`（合计 18）
+  - 覆盖：分段拼接、`finish_reason`、`usage`/`search_prompt_tokens`、`code!=0` 不算成功且不进入 delta、`reasoning_content` 忽略、`security_suggest=HIDE_CONTINUE` 跳过该段继续、usage 缺失 `estimated=1`、malformed 行跳过
+  - `mock-ok` 收满 20 段 + 末 chunk `usage(total_tokens=32)` + `[DONE]`；请求体断言含 `"thinking":{"type":"disabled"}` 且无 `stream_options`
+  - `mock-500` 首包前重试 1 次后成功（mock 服务端命中数 = 2）；`mock-429` 不重试、直接抛 `UpstreamHttpException(429)`
+  - `mock-code`（HTTP 200 + body.code=11201）暴露上游 code 且 `hasDelta=false`；`mock-security` 隐藏片段不转发、正文照收 20 段
+- mock profile 启动：`mvn spring-boot:run -Dspring-boot.run.profiles=mock` → `[mock] upstream started: http://127.0.0.1:18080/chat/completions`；`GET /api/v1/health` → `{"status":"UP","db":"UP",...}`
+- `curl -N` 经 mock 上游逐行收流（`--trace-ascii --trace-time` 实测到达时间）：`19:24:03.327 / .461 / .584 / .709 / .834 … 19:24:05.826`（相邻约 125ms，不是一次性）；`-w` → `http=200 first_byte=0.001272s total=2.486057s`；末两行为 `...finish_reason":"stop"... "usage":{"prompt_tokens":12,...}` 与 `data: [DONE]`
+- `ai.api-key` 在 mock 下取值 `mock`（`MockUpstreamServerTest.mockProfileStartsServerOn18080WithMockKey` 断言通过），不读真实 Key
+
+**偏离登记**：见 `开发文档/02 §10`（`@SpringBootTest(profiles=)` 不存在改 `@ActiveProfiles`；mock 增加 `mock-code`/`mock-security` 两个验收剧本；T14 提前建 `chat/dto/Msg`；`application.yml` 补 `ai.*` 默认键；重试落在 `LlmStreamClient.open()`）
+
 
 
 

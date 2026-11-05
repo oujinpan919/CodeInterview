@@ -1,0 +1,8 @@
+# mock profile 只覆盖 ai.*（05 §10.2）
+# datasource / 管理员初始密码仍来自 application.yml 的 spring.config.import
+# 加载的 config/application-local.yml —— 这里不要复制数据源配置，避免两处漂移。
+ai:
+  enabled: true
+  base-url: http://127.0.0.1:18080
+  model: mock-ok
+  api-key: mock
