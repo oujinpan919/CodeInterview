@@ -8,6 +8,9 @@
     <header class="admin-questions__head">
       <h1 class="admin-questions__title">题目管理</h1>
       <div class="admin-questions__head-actions">
+        <el-button class="admin-questions__import" @click="importVisible = true">
+          批量导入
+        </el-button>
         <el-button
           class="admin-questions__create"
           type="primary"
@@ -35,7 +38,7 @@
         <el-option
           v-for="category in categories"
           :key="category.id"
-          :label="category.name"
+          :label="category.status === 1 ? category.name : `${category.name}（已停用）`"
           :value="category.id"
         />
       </el-select>
@@ -177,6 +180,8 @@
 
       <PageBar :page="page" :size="PAGE_SIZE" :total="total" @change="handlePageChange" />
     </template>
+
+    <JsonImportDialog v-model="importVisible" @success="handleImportSuccess" />
   </section>
 </template>
 
@@ -189,15 +194,16 @@ import 'element-plus/theme-chalk/el-message.css'
 import 'element-plus/theme-chalk/el-message-box.css'
 import {
   deleteAdminQuestion,
+  getAdminCategories,
   getAdminQuestions,
   offlineAdminQuestion,
   publishAdminQuestion
 } from '@/api/admin'
-import { getCategories } from '@/api/taxonomy'
 import DifficultyTag from '@/components/DifficultyTag.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import PageBar from '@/components/PageBar.vue'
+import JsonImportDialog from '@/components/admin/JsonImportDialog.vue'
 
 const PAGE_SIZE = 10
 const STATUS_LABELS = { 0: '草稿', 1: '发布', 2: '下架' }
@@ -217,6 +223,7 @@ const categories = ref([])
 const loading = ref(false)
 const loadError = ref('')
 const actingId = ref('')
+const importVisible = ref(false)
 
 let loadSeq = 0
 
@@ -253,11 +260,17 @@ async function loadList() {
 
 async function loadCategories() {
   try {
-    const data = await getCategories()
+    // 管理端分类接口含停用分类（04 A3.9 #35），筛旧题时也能看到
+    const data = await getAdminCategories()
     categories.value = Array.isArray(data) ? data : []
   } catch {
     categories.value = []
   }
+}
+
+function handleImportSuccess() {
+  loadList()
+  loadCategories()
 }
 
 function handleFilterChange() {
@@ -395,6 +408,12 @@ onMounted(() => {
 .admin-questions__create {
   min-height: 44px;
   padding: 0 var(--space-5);
+  border-radius: var(--radius-button);
+}
+
+.admin-questions__import {
+  min-height: 44px;
+  margin-right: var(--space-2);
   border-radius: var(--radius-button);
 }
 

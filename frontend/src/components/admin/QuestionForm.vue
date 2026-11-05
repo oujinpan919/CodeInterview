@@ -30,7 +30,7 @@
                 <el-option
                   v-for="category in categories"
                   :key="category.id"
-                  :label="category.name"
+                  :label="category.status === 0 ? `${category.name}（已停用）` : category.name"
                   :value="category.id"
                 />
               </el-select>

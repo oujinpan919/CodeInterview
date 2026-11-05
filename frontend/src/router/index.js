@@ -1,22 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { h } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { registerNavHandlers } from '@/utils/request'
-
-// 后续任务卡会逐个替换为真实页面（T05 题库 / T06 详情 / T07 首页 / T08 收藏 / T10 错题本 / T11 记录 / T12–T13 管理端）
-const pendingView = (key, title) => ({
-  name: `Pending${key}`,
-  render: () =>
-    h(
-      'div',
-      {
-        class: 'pending-view',
-        style:
-          'padding: 64px 0; text-align: center; color: var(--color-text-secondary); font-size: var(--font-size-body);'
-      },
-      `${title}页面将在后续任务卡实现`
-    )
-})
 
 // 04 B1 路由表（14 个页面 + 管理端父级重定向 + 404 catch-all）
 const routes = [
@@ -94,7 +78,7 @@ const routes = [
   {
     path: '/admin/taxonomy',
     name: 'admin-taxonomy',
-    component: pendingView('AdminTaxonomy', '分类与标签'),
+    component: () => import('@/views/admin/AdminTaxonomy.vue'),
     meta: { title: '分类与标签', requiresAuth: true, requiresAdmin: true }
   },
   {

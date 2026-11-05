@@ -39,11 +39,12 @@ import 'element-plus/theme-chalk/el-message.css'
 import 'element-plus/theme-chalk/el-message-box.css'
 import {
   createAdminQuestion,
+  getAdminCategories,
   getAdminQuestion,
   publishAdminQuestion,
   updateAdminQuestion
 } from '@/api/admin'
-import { getCategories, getTags } from '@/api/taxonomy'
+import { getTags } from '@/api/taxonomy'
 import QuestionForm from '@/components/admin/QuestionForm.vue'
 import ErrorState from '@/components/ErrorState.vue'
 
@@ -84,7 +85,7 @@ async function loadPage() {
   loading.value = true
   loadError.value = ''
   try {
-    const [categoryList, tagList] = await Promise.all([getCategories(), getTags()])
+    const [categoryList, tagList] = await Promise.all([getAdminCategories(), getTags()])
     categories.value = Array.isArray(categoryList) ? categoryList : []
     tags.value = Array.isArray(tagList) ? tagList : []
     if (isEdit.value) {

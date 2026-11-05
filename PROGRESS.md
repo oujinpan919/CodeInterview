@@ -332,6 +332,27 @@
 
 **偏离登记**：见 `开发文档/02 §10`（写侧 Question 实体与辅助 VO、SaTokenConfig 启用注解鉴权、T12 暂用公开分类接口待 T13 切换、QuestionForm 增加 cancel emit）。
 
+### T13 · 分类标签维护 + JSON 批量导入 ✅
+
+**改动文件**
+- 后端（新增）：`admin/taxonomy/{AdminCategoryController,AdminTagController,AdminTaxonomyService,AdminTaxonomyMapper}.java`、`admin/imports/{ImportController,ImportService,ImportResult,ImportMapper}.java`、`admin/dto/{CategorySaveReq,TagSaveReq,ImportReq}.java`、`admin/vo/{AdminCategoryResp,IdResp}.java`、`taxonomy/entity/{Category,Tag}.java`
+- 前端（新增）：`src/views/admin/AdminTaxonomy.vue`、`src/components/admin/JsonImportDialog.vue`
+- 前端（修改）：`src/api/admin.js`（分类/标签 CRUD + 导入）、`src/views/admin/AdminQuestions.vue`（分类下拉改管理端接口 + 批量导入入口）、`src/views/admin/AdminQuestionEdit.vue`（分类下拉改管理端接口）、`src/router/index.js`（`/admin/taxonomy` 换真实组件）
+
+**验收（真实输出，2026-11-05，真实 DB + curl + headless Edge/CDP）**
+- `GET /admin/categories` → 5 条，字段 `id,name,description,sort,status,questionCount,publishedCount`；Java `1/1`；新建草稿题后 Java `2/1`（**questionCount 含草稿、publishedCount 只算发布态**，口径可区分）
+- 新建/改名/停用分类：停用后管理端表格仍返回 `status=0`（含编辑说明），公开 `GET /categories` 不再返回；删除被引用分类 Java → HTTP 409 `40901`「该分类下还有题目，不能删除；可改为停用」；删除空分类成功；重名 → 409 `40900`；删除不存在 → 404
+- 标签：新建/改名成功；重名 409；删除被引用标签 → 409 `40901`「标签已被题目引用，需先解除关联」；删除未引用标签成功
+- 导入 20 题（含 2 条重复）→ `{"created":18,"skipped":2,"failed":0}`，DB 题数 +18；顶层 category 自动创建（`NetImport`）、tags 自动创建（`TCP/UDP`），每题 2 条 question_tag（合计 36）；status=1 的 2 题前台列表可见
+- 导入含 1 条缺 `answer_md` → `{"created":2,"failed":1,"errors":[{"index":1,"reason":"answer_md 不能为空"}]}`（index 从 0 开始，其余不受影响）
+- 导入 51 题 → HTTP 400 `40000`「questions 数量必须为 1–50」，DB 题数不变（无入库）；非法 JSON → 400 `40000` 带解析信息；空 questions → 400
+- 单题 `category` 覆盖顶层 → 入库到 MySQL（`override category = MySQL`）
+- 浏览器：分类表 5 行 / 标签表 15 行；行内新增「E2E分类」→ 停用后管理端仍在、前台 `/categories` 不含；管理端题目筛选下拉显示「E2E分类（已停用）」；删除 Java → 40901 提示且仍在列表；对话框改名成功；删除空分类成功；标签新增/改名（prompt）/删除成功；导入对话框非法 JSON 就地提示「第 1 行第 2 列」；合法 JSON 显示「创建 2 条 · 跳过 0 条 · 失败 0 条」且列表出现导入题；375×667 分类/标签切 Tab、无横向滚动
+- `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0
+
+**偏离登记**：见 `开发文档/02 §10`（新增管理端 Mapper/实体与 ImportController、导入 status=1 写 published_at、逐条独立入库无整批事务、管理端下拉切换到 /admin/categories、编辑交互细节）。
+
+
 
 
 
