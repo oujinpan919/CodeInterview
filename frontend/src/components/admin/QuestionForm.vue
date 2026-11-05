@@ -1,5 +1,11 @@
 <template>
   <div class="question-form">
+    <!-- 04 B7.2：管理端编辑页左右分栏在 <768 改为顶部 Tab「编辑 / 预览」 -->
+    <el-tabs v-if="isMobile" v-model="mobileTab" class="question-form__mobile-tabs">
+      <el-tab-pane label="编辑" name="edit" />
+      <el-tab-pane label="预览" name="preview" />
+    </el-tabs>
+
     <div class="question-form__columns" :class="{ 'question-form__columns--mobile': isMobile }">
       <section v-show="!isMobile || mobileTab === 'edit'" class="question-form__pane">
         <el-form
@@ -159,7 +165,17 @@ const mobileTab = ref('edit')
 const previewTab = ref('content')
 const formRef = ref(null)
 
-const form = computed(() => props.modelValue)
+// 本地草稿：同一 tick 内多次 patch 时不能基于可能过期的 props 合并，否则会丢字段
+const draft = ref({ ...props.modelValue })
+watch(
+  () => props.modelValue,
+  (value) => {
+    draft.value = { ...value }
+  },
+  { deep: true }
+)
+
+const form = computed(() => draft.value)
 
 const previewContent = ref('')
 const previewAnswer = ref('')
@@ -206,7 +222,8 @@ const rules = {
 }
 
 function patch(key, value) {
-  emit('update:modelValue', { ...props.modelValue, [key]: value })
+  draft.value = { ...draft.value, [key]: value }
+  emit('update:modelValue', { ...draft.value })
 }
 
 function toPayload() {
@@ -238,6 +255,10 @@ async function handleSave(publish) {
 <style scoped>
 .question-form {
   padding-bottom: 72px;
+}
+
+.question-form__mobile-tabs {
+  margin-bottom: var(--space-3);
 }
 
 .question-form__columns {
@@ -329,6 +350,10 @@ async function handleSave(publish) {
 
   .question-form__preview :deep(.el-textarea__inner) {
     height: 40vh;
+  }
+
+  .question-form__pane :deep(.el-textarea__inner) {
+    min-height: 40vh;
   }
 }
 </style>

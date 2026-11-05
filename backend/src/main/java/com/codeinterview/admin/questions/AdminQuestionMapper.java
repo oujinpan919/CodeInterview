@@ -30,7 +30,10 @@ public interface AdminQuestionMapper extends BaseMapper<Question> {
             <if test="status != null"> AND q.status = #{status}</if>
             <if test="categoryId != null"> AND q.category_id = #{categoryId}</if>
             <if test="keyword != null and keyword != ''">
-              AND q.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\\\'
+              AND (q.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\\\'
+                   OR EXISTS (SELECT 1 FROM question_tag qt3 JOIN tag t3 ON t3.id = qt3.tag_id
+                              WHERE qt3.question_id = q.id
+                                AND t3.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\\\'))
             </if>
             </script>
             """)
@@ -48,7 +51,10 @@ public interface AdminQuestionMapper extends BaseMapper<Question> {
             <if test="status != null"> AND q.status = #{status}</if>
             <if test="categoryId != null"> AND q.category_id = #{categoryId}</if>
             <if test="keyword != null and keyword != ''">
-              AND q.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\\\'
+              AND (q.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\\\'
+                   OR EXISTS (SELECT 1 FROM question_tag qt3 JOIN tag t3 ON t3.id = qt3.tag_id
+                              WHERE qt3.question_id = q.id
+                                AND t3.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\\\'))
             </if>
             ORDER BY q.updated_at DESC, q.id DESC
             LIMIT #{offset}, #{size}
@@ -103,6 +109,7 @@ public interface AdminQuestionMapper extends BaseMapper<Question> {
             + "updated_at = NOW(3) WHERE id = #{id} AND deleted = 0")
     int publish(@Param("id") Long id);
 
-    @Update("UPDATE question SET status = 2, updated_at = NOW(3) WHERE id = #{id} AND deleted = 0")
+    @Update("UPDATE question SET status = 2, updated_at = NOW(3) "
+            + "WHERE id = #{id} AND deleted = 0 AND status = 1")
     int offline(@Param("id") Long id);
 }

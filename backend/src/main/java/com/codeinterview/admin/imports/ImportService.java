@@ -38,6 +38,8 @@ public class ImportService {
 
     private static final int MAX_QUESTIONS = 50;
     private static final int MAX_TAGS = 10;
+    private static final int MIN_DIFFICULTY = 1;
+    private static final int MAX_DIFFICULTY = 3;
     private static final int MAX_JSON_CHARS = 1_000_000;
     private static final int MAX_TITLE_LENGTH = 120;
     private static final int MAX_CONTENT_LENGTH = 20000;
@@ -93,6 +95,8 @@ public class ImportService {
             }
             index++;
         }
+        log.info("audit action=QUESTION_IMPORT userId={} targetId=- result=OK created={} skipped={} failed={}",
+                userId, result.getCreated(), result.getSkipped(), result.getFailed());
         return result;
     }
 
@@ -106,7 +110,7 @@ public class ImportService {
         String contentMd = requireText(node, "content_md", "content_md 不能为空", MAX_CONTENT_LENGTH);
         String answerMd = requireText(node, "answer_md", "answer_md 不能为空", MAX_CONTENT_LENGTH);
         int difficulty = requireInt(node, "difficulty");
-        if (difficulty < 1 || difficulty > 3) {
+        if (difficulty < MIN_DIFFICULTY || difficulty > MAX_DIFFICULTY) {
             throw new ItemException("difficulty 只能为 1/2/3");
         }
         String source = optionalText(node, "source", MAX_SOURCE_LENGTH, "");
@@ -121,20 +125,20 @@ public class ImportService {
         if (categoryRef == null || categoryRef.name() == null || categoryRef.name().isBlank()) {
             throw new ItemException("缺少分类（顶层 category 或单题 category）");
         }
-        Long categoryId = findOrCreateCategory(categoryRef, categoryCache);
-
         List<String> mergedTags = mergeTags(defaultTags, parseItemTags(node.get("tags")));
         if (mergedTags.size() > MAX_TAGS) {
             throw new ItemException("最多 10 个标签");
         }
-        List<Long> tagIds = new ArrayList<>(mergedTags.size());
-        for (String tagName : mergedTags) {
-            tagIds.add(findOrCreateTag(tagName, tagCache));
-        }
 
+        Long categoryId = findOrCreateCategory(categoryRef, categoryCache);
+        // 查重在写标签之前：重复题直接 skipped，避免留下孤儿标签（review B2）
         if (importMapper.selectDuplicateId(categoryId, title, contentMd) != null) {
             result.markSkipped();
             return;
+        }
+        List<Long> tagIds = new ArrayList<>(mergedTags.size());
+        for (String tagName : mergedTags) {
+            tagIds.add(findOrCreateTag(tagName, tagCache));
         }
 
         Question question = new Question();

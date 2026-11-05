@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.codeinterview.admin.dto.QuestionSaveReq;
 import com.codeinterview.admin.vo.AdminQuestionDetailResp;
 import com.codeinterview.admin.vo.AdminQuestionListItemResp;
-import com.codeinterview.admin.vo.QuestionIdResp;
+import com.codeinterview.admin.vo.IdResp;
 import com.codeinterview.admin.vo.QuestionStatusResp;
 import com.codeinterview.common.result.PageResp;
 import com.codeinterview.common.result.Result;
@@ -57,9 +57,9 @@ public class AdminQuestionController {
 
     @Operation(summary = "新建题目（初始 status=0 草稿）")
     @PostMapping
-    public Result<QuestionIdResp> create(@RequestBody @Valid QuestionSaveReq req) {
+    public Result<IdResp> create(@RequestBody @Valid QuestionSaveReq req) {
         Long userId = StpUtil.getLoginIdAsLong();
-        return Result.success(new QuestionIdResp(adminQuestionService.create(req, userId)));
+        return Result.success(new IdResp(adminQuestionService.create(req, userId)));
     }
 
     @Operation(summary = "更新题目（全量；已发布题保存后前台立即生效）")

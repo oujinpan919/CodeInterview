@@ -15,21 +15,23 @@ import com.codeinterview.common.result.ResultCode;
 import com.codeinterview.common.util.PageUtil;
 import com.codeinterview.question.entity.Question;
 
+import cn.dev33.satoken.stp.StpUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 管理端题目维护（01 F09 / 04 A3.9 #27–#33）。
  * 状态流转见 03 §4.1：新建=草稿、发布写 published_at（仅首次）、下架=2、逻辑删除 deleted=1。
+ * 每次写操作按 02 §5.6 打审计日志（V1 只落应用日志）。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminQuestionService {
 
     private static final int MAX_KEYWORD_LENGTH = 30;
     private static final int MAX_TAGS = 10;
-    private static final int MAX_SOURCE_LENGTH = 50;
     private static final int CATEGORY_ENABLED = 1;
-    private static final int MAX_TITLE_LENGTH = 120;
 
     private final AdminQuestionMapper adminQuestionMapper;
 
@@ -75,6 +77,7 @@ public class AdminQuestionService {
         question.setCreatedBy(userId);
         adminQuestionMapper.insert(question);
         replaceTags(question.getId(), tagIds);
+        audit("QUESTION_CREATE", question.getId());
         return question.getId();
     }
 
@@ -98,6 +101,7 @@ public class AdminQuestionService {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
         replaceTags(id, tagIds);
+        audit("QUESTION_UPDATE", id);
     }
 
     /** 逻辑删除：不做引用检查（01 F09）；已收藏/错题行保留但前台按 deleted=0 过滤。 */
@@ -105,6 +109,7 @@ public class AdminQuestionService {
         if (adminQuestionMapper.deleteById(id) == 0) {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
+        audit("QUESTION_DELETE", id);
     }
 
     /** 发布前校验必填项齐全（04 A3.9 #32），缺哪项就指出哪个字段。 */
@@ -134,13 +139,19 @@ public class AdminQuestionService {
         if (adminQuestionMapper.publish(id) == 0) {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
+        audit("QUESTION_PUBLISH", id);
         return Question.STATUS_PUBLISHED;
     }
 
+    /** 03 §4.1 唯一状态机只定义 1 发布 → 2 下架；草稿/已下架不能直接下架。 */
     public int offline(Long id) {
         if (adminQuestionMapper.offline(id) == 0) {
-            throw new BusinessException(ResultCode.NOT_FOUND);
+            if (adminQuestionMapper.selectById(id) == null) {
+                throw new BusinessException(ResultCode.NOT_FOUND);
+            }
+            throw new BusinessException(ResultCode.PARAM_ERROR, "只有已发布的题目可以下架");
         }
+        audit("QUESTION_OFFLINE", id);
         return Question.STATUS_OFFLINE;
     }
 
@@ -181,11 +192,7 @@ public class AdminQuestionService {
     }
 
     private String normalizeSource(String source) {
-        if (source == null) {
-            return "";
-        }
-        String trimmed = source.trim();
-        return trimmed.length() > MAX_SOURCE_LENGTH ? trimmed.substring(0, MAX_SOURCE_LENGTH) : trimmed;
+        return source == null ? "" : source.trim();
     }
 
     private String normalizeKeyword(String keyword) {
@@ -199,10 +206,13 @@ public class AdminQuestionService {
         if (trimmed.length() > MAX_KEYWORD_LENGTH) {
             trimmed = trimmed.substring(0, MAX_KEYWORD_LENGTH);
         }
-        if (trimmed.length() > MAX_TITLE_LENGTH) {
-            trimmed = trimmed.substring(0, MAX_TITLE_LENGTH);
-        }
         return trimmed.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** 02 §5.6：管理端写操作审计（V1 只落应用日志，不做查询界面）。 */
+    private void audit(String action, Long targetId) {
+        log.info("audit action={} userId={} targetId={} result=OK", action,
+                StpUtil.getLoginIdAsLong(), targetId);
     }
 
     private boolean isBlank(String value) {

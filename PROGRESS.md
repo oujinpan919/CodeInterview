@@ -10,6 +10,8 @@
 | A1 工程基建 | T01 / T02 / T03 | ✅ 通过（health UP、404 走 handler、参数 400、seed 入库） |
 | A2 登录鉴权 | T04 | ✅ 通过（注册/登录/刷新保持/登出/改名改密/锁定） |
 | A3 题库只读 | T05 / T06 / T07 | ✅ 通过（首页/列表/详情/代码高亮/登录/刷新保持，浏览器实测） |
+| B1 学习闭环 | T08 / T09 / T10 / T11 | ✅ 通过（收藏→错题→掌握→统计，浏览器 16/16；code-review 已完成） |
+| B2 管理端 | T12 / T13 | ✅ 通过（分类标签/导入/建题发布下架，浏览器 11/11；code-review 已完成） |
 
 ## 卡片记录
 
@@ -351,6 +353,49 @@
 - `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0
 
 **偏离登记**：见 `开发文档/02 §10`（新增管理端 Mapper/实体与 ImportController、导入 status=1 写 published_at、逐条独立入库无整批事务、管理端下拉切换到 /admin/categories、编辑交互细节）。
+
+### B2 检查点（T12–T13 管理端）✅
+
+**浏览器全链路（headless Edge/CDP，真实接口与真实 DB）11/11 通过**
+- 管理员登录 → 管理端入口 → 分类与标签页：行内新增「B2分类」/「B2标签」成功 → 题目管理页「批量导入」2 题（摘要「创建 2 条 · 跳过 0 条 · 失败 0 条」）→ 新建题（标题/题干/答案/分类 Java/难度中等）→ **「保存并发布」一步完成** → 列表状态=发布 → 前台 `/question/{id}` 标题与答案折叠按钮均正常 → 下架 → 前台 404 → 删除 → 管理端列表消失 → 停用分类后管理端仍在、前台 `/categories` 不含 → 375×667 管理端无横向滚动
+- 修复项专项验证 13/13：admin 关键词匹配标签名（JVM → 1 条）、草稿不可直接下架（40000）、已发布可下架、停用分类带「已停用」文字、移动端「编辑/预览」Tab 可切换（默认编辑、点预览隐藏表单）、导入弹窗在 375 下宽 345px 无横滚、已发布题保存前弹「前台将立即更新」且取消不保存
+
+**代码审查（code-review，fixed point `e2fc1f0` = T11 修复提交）**
+- **Standards 轴** 7 项：已修 6 项——移动端编辑页无「编辑/预览」Tab（`mobileTab` 死状态，已补 el-tabs）、管理端 15 个写接口缺审计日志（已补 `audit action=… userId=… targetId=… result=OK`）、`offline` 不校验源状态（已限定 1→2，草稿下架返回 40000）、标签表无空态（已补 EmptyState/ErrorState）、`difficulty` 魔法值（已提常量）、`QuestionForm.submitting` 未登记（已登记 02 §10）；1 项判断保留（`countAdminPage` 与 `selectAdminPage` 的 WHERE 重复，注解 Mapper 无法共享 SQL 片段）。
+- **Spec 轴** 确认 3 项 + 存疑 3 项：已修——已发布题保存前缺「前台将立即更新」确认（01 F09，已补确认框）、移动端 Tab（同上）、标签表空态/失败态（同上）、admin 关键词只匹配标题（04 #27 指向 #8，已改为标题或标签名）、分类表格无「已停用」文字（已补 el-tag）；判断处理——删除确认文案按 04 A3.9 #31（收藏用户也看不到）实现并在 02 §10 登记与 B4.10 的矛盾；`publishedCount` 展示按 04 A3.9 #35「仅用于展示」保留；scope creep 另清死分支（keyword 30 后判 120 恒假、source 50 截断不可达）与 `QuestionIdResp` 同构类。
+- 另修：查询参数类型不匹配（如 `status=abc`）原先落 50000，`GlobalExceptionHandler` 增加 `MethodArgumentTypeMismatchException → 40000`。
+
+**回归**：T12 浏览器 18/18、T13 浏览器 17/17、B1 全链 16/16、T09/T10/T11 浏览器 18/13/18 全绿；`mvn -q clean package -DskipTests`、`npm run lint`、`npm run build` 全绿。
+
+**数据还原**：B1/B2 验证用的临时数据已全部还原为 seed 原状（3 道草稿题、6 条 question_tag、5 分类、15 标签、仅 admin 用户、无刷题/错题/收藏记录、view/practice 计数归零）。
+
+---
+
+## 【交接 · 会话 B】
+
+- **已完成**：T08–T13（B1=T08-T11、B2=T12-T13 全部检查点通过）
+- **提交记录**（`git log --oneline -8`，由新到旧）：
+  ```
+  <B2 修复 commit> fix(T12-T13): code-review 修复（B2）
+  5291c27 feat(T13): 分类标签维护 + JSON 批量导入
+  14f112e feat(T12): 管理端题目 CRUD + 发布/下架（含编辑预览与未保存确认）
+  e2fc1f0 fix(T08-T11): code-review 修复（分页口径/错题SQL去重/自评loading/今日数/图表色/滚动）
+  10818a4 feat(T11): 统计与图表（5 指标卡 + 折线/饼图）
+  e31a5c5 feat(T10): 错题本（列表/标记掌握/彻底移除/去复习）
+  c372997 feat(T09): 三档自评 + 刷题记录（事务内写记录/错题/计数）
+  bb25674 feat(T08): 收藏（幂等收藏 / 我的收藏 / 详情收藏按钮）
+  ```
+- **文档偏离**：见 `开发文档/02 §10`（T08–T13 及两轮 code-review 新增约 30 条：辅助 VO/Entity、PageUtil、WR upsert 行别名、详情页今日数数据源、导入状态机与落点、分页失败表现、图表色 token、删除确认文案等）
+- **已知问题 / 判断项**：
+  1. 管理端列表 `countAdminPage` 与 `selectAdminPage` 的 WHERE 条件重复（注解 Mapper 无 SQL 片段共享，属可接受重复）。
+  2. `@Schema` 注解全仓未使用（02 §5.7 文档要求，既有类一致；springdoc 默认关闭）。
+  3. 取消收藏按「不做二次确认」实现（04 B4.6 括号语义「二次确认=关闭」，02 §10 已登记）。
+  4. 已下架题在收藏/错题列表置灰、详情 404；逻辑删除题三处均不展示（已实测）。
+  5. 「问助手」按钮属 T16，本段未实现（04 B4.3 操作行剩余项）。
+- **测试**：`mvn -q -DskipTests package` 通过（T14/T15/T18 才落单测）；`npm run lint` / `npm run build` 绿。
+- **PROGRESS.md**：已更新到 B2。
+- **恢复起点（会话 C）**：T14 mock 上游 + 上游客户端；DB 为 seed 3 草稿题 + admin（与 A 段交接一致），AI Key 留空、全程 mock profile。
+
 
 
 

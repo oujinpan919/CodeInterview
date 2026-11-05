@@ -60,6 +60,8 @@ const categories = ref([])
 const tags = ref([])
 
 const model = ref(emptyModel())
+// 当前题目的发布状态：已发布题保存前必须确认「前台将立即更新」（01 F09）
+const questionStatus = ref(0)
 // 快照必须是响应式的，否则保存后 dirty 计算属性仍读缓存值，路由守卫会误拦
 const snapshot = ref('')
 
@@ -99,8 +101,10 @@ async function loadPage() {
         tagIds: Array.isArray(detail.tagIds) ? detail.tagIds : [],
         source: detail.source || ''
       }
+      questionStatus.value = detail.status
     } else {
       model.value = emptyModel()
+      questionStatus.value = 0
     }
     markClean()
   } catch (error) {
@@ -112,6 +116,18 @@ async function loadPage() {
 
 async function handleSubmit(payload, publish) {
   if (saving.value) return
+  // 01 F09：已发布题保存前确认「前台将立即更新」
+  if (isEdit.value && questionStatus.value === 1) {
+    try {
+      await ElMessageBox.confirm('该题已发布，保存后前台将立即更新，确定保存吗？', '前台将立即更新', {
+        type: 'warning',
+        confirmButtonText: '保存',
+        cancelButtonText: '取消'
+      })
+    } catch {
+      return
+    }
+  }
   saving.value = true
   try {
     let id = questionId.value
@@ -124,6 +140,7 @@ async function handleSubmit(payload, publish) {
     }
     if (publish) {
       await publishAdminQuestion(id)
+      questionStatus.value = 1
       ElMessage.success('已保存并发布，前台立即可见')
     } else {
       ElMessage.success('已保存草稿')
@@ -204,6 +221,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 767px) {
+  /* B2：手机上只显示面包屑最后一级 */
+  .admin-question-edit__breadcrumb :deep(.el-breadcrumb__item:not(:last-child)) {
+    display: none;
+  }
+
   .admin-question-edit__title {
     font-size: var(--font-size-h2);
   }

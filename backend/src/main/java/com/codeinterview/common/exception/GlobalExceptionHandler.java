@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -55,6 +56,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<Result<Void>> handleMissingParameter(MissingServletRequestParameterException ex) {
         return build(ResultCode.PARAM_ERROR, "缺少参数: " + ex.getParameterName());
+    }
+
+    /** 查询参数/路径参数类型不匹配（如 status=abc）按 40000 处理，不能落到 50000（04 A1 参数错误口径）。 */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Result<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return build(ResultCode.PARAM_ERROR, "参数格式错误: " + ex.getName());
     }
 
     @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})

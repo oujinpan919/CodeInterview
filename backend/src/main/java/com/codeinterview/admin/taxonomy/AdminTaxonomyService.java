@@ -12,13 +12,18 @@ import com.codeinterview.taxonomy.entity.Category;
 import com.codeinterview.taxonomy.entity.Tag;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+
+import cn.dev33.satoken.stp.StpUtil;
 
 /**
  * 管理端分类/标签维护（01 F09 / 04 A3.9 #36–#41）。
  * 名称唯一靠库唯一键判定（捕获 DuplicateKeyException → 40900），引用校验 → 40901。
+ * 写操作按 02 §5.6 打审计日志。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminTaxonomyService {
@@ -43,6 +48,7 @@ public class AdminTaxonomyService {
         } catch (DuplicateKeyException ex) {
             throw new BusinessException(ResultCode.CONFLICT, "分类名已存在");
         }
+        audit("CATEGORY_CREATE", category.getId());
         return category.getId();
     }
 
@@ -61,6 +67,7 @@ public class AdminTaxonomyService {
         } catch (DuplicateKeyException ex) {
             throw new BusinessException(ResultCode.CONFLICT, "分类名已存在");
         }
+        audit("CATEGORY_UPDATE", id);
     }
 
     public void deleteCategory(Long id) {
@@ -71,6 +78,7 @@ public class AdminTaxonomyService {
             throw new BusinessException(ResultCode.REFERENCE_CONFLICT, "该分类下还有题目，不能删除；可改为停用");
         }
         adminTaxonomyMapper.deleteCategory(id);
+        audit("CATEGORY_DELETE", id);
     }
 
     public Long createTag(TagSaveReq req) {
@@ -81,6 +89,7 @@ public class AdminTaxonomyService {
         } catch (DuplicateKeyException ex) {
             throw new BusinessException(ResultCode.CONFLICT, "标签名已存在");
         }
+        audit("TAG_CREATE", tag.getId());
         return tag.getId();
     }
 
@@ -96,6 +105,7 @@ public class AdminTaxonomyService {
         } catch (DuplicateKeyException ex) {
             throw new BusinessException(ResultCode.CONFLICT, "标签名已存在");
         }
+        audit("TAG_UPDATE", id);
     }
 
     public void deleteTag(Long id) {
@@ -106,9 +116,16 @@ public class AdminTaxonomyService {
             throw new BusinessException(ResultCode.REFERENCE_CONFLICT, "标签已被题目引用，需先解除关联");
         }
         adminTaxonomyMapper.deleteTag(id);
+        audit("TAG_DELETE", id);
     }
 
     private String normalizeDescription(String description) {
         return description == null ? "" : description.trim();
+    }
+
+    /** 02 §5.6：管理端写操作审计（V1 只落应用日志）。 */
+    private void audit(String action, Long targetId) {
+        log.info("audit action={} userId={} targetId={} result=OK", action,
+                StpUtil.getLoginIdAsLong(), targetId);
     }
 }

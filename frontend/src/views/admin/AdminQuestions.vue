@@ -417,6 +417,12 @@ onMounted(() => {
   border-radius: var(--radius-button);
 }
 
+.admin-questions__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .admin-questions__filters {
   display: flex;
   flex-wrap: wrap;
@@ -507,6 +513,22 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
+  /* B2：手机上只显示面包屑最后一级 */
+  .admin-questions__breadcrumb :deep(.el-breadcrumb__item:first-child) {
+    display: none;
+  }
+
+  .admin-questions__head-actions {
+    width: 100%;
+  }
+
+  .admin-questions__head-actions .admin-questions__import,
+  .admin-questions__head-actions .admin-questions__create {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+  }
+
   .admin-questions__filters {
     flex-wrap: nowrap;
     overflow-x: auto;

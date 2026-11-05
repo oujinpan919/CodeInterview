@@ -59,15 +59,20 @@
             <el-table-column prop="name" label="名称" min-width="120" />
             <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
             <el-table-column prop="sort" label="排序" width="80" />
-            <el-table-column label="状态" width="100">
+            <el-table-column label="状态" width="140">
               <template #default="{ row }">
-                <el-switch
-                  :model-value="row.status"
-                  :active-value="1"
-                  :inactive-value="0"
-                  :loading="actingId === row.id"
-                  @change="(value) => toggleCategoryStatus(row, value)"
-                />
+                <div class="taxonomy__status">
+                  <el-switch
+                    :model-value="row.status"
+                    :active-value="1"
+                    :inactive-value="0"
+                    :loading="actingId === row.id"
+                    @change="(value) => toggleCategoryStatus(row, value)"
+                  />
+                  <el-tag v-if="row.status === 0" type="info" size="small" effect="plain">
+                    已停用
+                  </el-tag>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="题目数" width="130">
@@ -122,32 +127,39 @@
           </el-button>
         </div>
 
-        <el-table :data="tags" class="taxonomy__table" row-key="id">
-          <el-table-column prop="name" label="名称" min-width="140" />
-          <el-table-column prop="questionCount" label="题目数" width="100" />
-          <el-table-column label="操作" width="150" fixed="right">
-            <template #default="{ row }">
-              <div class="taxonomy__actions">
-                <el-button link type="primary" class="taxonomy__action" @click="editTag(row)">
-                  编辑
-                </el-button>
-                <el-button
-                  link
-                  type="danger"
-                  class="taxonomy__action"
-                  :loading="actingId === row.id"
-                  @click="deleteTag(row)"
-                >
-                  删除
-                </el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+        <div v-if="loading" class="taxonomy__skeleton" aria-busy="true">
+          <el-skeleton :rows="4" animated />
+        </div>
+        <ErrorState v-else-if="loadError" :message="loadError" @retry="loadAll" />
+        <template v-else>
+          <el-table :data="tags" class="taxonomy__table" row-key="id">
+            <el-table-column prop="name" label="名称" min-width="140" />
+            <el-table-column prop="questionCount" label="题目数" width="100" />
+            <el-table-column label="操作" width="150" fixed="right">
+              <template #default="{ row }">
+                <div class="taxonomy__actions">
+                  <el-button link type="primary" class="taxonomy__action" @click="editTag(row)">
+                    编辑
+                  </el-button>
+                  <el-button
+                    link
+                    type="danger"
+                    class="taxonomy__action"
+                    :loading="actingId === row.id"
+                    @click="deleteTag(row)"
+                  >
+                    删除
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+          <EmptyState v-if="tags.length === 0" title="还没有标签" description="先新增标签，编辑题目时可挂载" />
+        </template>
       </section>
     </div>
 
-    <el-dialog v-model="categoryDialogVisible" title="编辑分类" width="420px">
+    <el-dialog v-model="categoryDialogVisible" title="编辑分类" :width="isMobile ? '88%' : '420px'">
       <el-form label-position="top">
         <el-form-item label="名称">
           <el-input v-model="categoryEdit.name" maxlength="30" show-word-limit />
@@ -371,7 +383,8 @@ async function editTag(row) {
         return true
       },
       confirmButtonText: '保存',
-      cancelButtonText: '取消'
+      cancelButtonText: '取消',
+      customClass: 'taxonomy__prompt'
     })
     value = result.value.trim()
   } catch {
@@ -498,6 +511,13 @@ onMounted(loadAll)
   font-size: var(--font-size-aux);
 }
 
+.taxonomy__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .taxonomy__actions {
   display: flex;
   flex-wrap: wrap;
@@ -520,6 +540,10 @@ onMounted(loadAll)
 }
 
 @media (max-width: 767px) {
+  .taxonomy__breadcrumb :deep(.el-breadcrumb__item:first-child) {
+    display: none;
+  }
+
   .taxonomy__card {
     padding: var(--space-4);
   }

@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="modelValue"
     title="批量导入题目"
-    width="720px"
+    :width="isMobile ? '92%' : '720px'"
     class="json-import"
     :close-on-click-modal="false"
     @update:model-value="close"
@@ -60,6 +60,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useMediaQuery } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import 'element-plus/theme-chalk/el-message.css'
 import { importAdminQuestions } from '@/api/admin'
@@ -69,6 +70,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue', 'success'])
+
+const isMobile = useMediaQuery('(max-width: 767px)')
 
 const jsonText = ref('')
 const errorText = ref('')
