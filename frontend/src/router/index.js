@@ -65,7 +65,7 @@ const routes = [
   {
     path: '/records',
     name: 'records',
-    component: pendingView('Records', '刷题记录'),
+    component: () => import('@/views/Records.vue'),
     meta: { title: '刷题记录', requiresAuth: true, requiresAdmin: false }
   },
   {

@@ -230,6 +230,31 @@
 
 **偏离登记**：见 `开发文档/02 §10`（T08 改动文件未列 `QuestionDetail.vue` 与辅助 VO，但「详情页收藏按钮」与 Result 出参类型属本卡职责）。
 
+### T09 · 三档自评 + 刷题记录 ✅
+
+**改动文件**
+- 后端（新增）：`practice/{AssessmentController,AssessmentService,PracticeRecordController,PracticeRecordService,PracticeRecordMapper,WrongRecordMapper}.java`、`practice/entity/PracticeRecord.java`、`practice/dto/AssessmentReq.java`、`practice/vo/{AssessmentResp,WrongBookState,PracticeRecordResp}.java`
+- 后端（共享文件修改）：`question/QuestionMapper.java`（新增 `increasePracticeCount` 原子自增）
+- 前端：`src/components/AssessmentBar.vue`（新增）、`src/views/QuestionDetail.vue`（自评区 + 2s 防抖 + source）、`src/views/Records.vue`（新增，记录列表部分）、`src/api/record.js`（新增）、`src/router/index.js`（`/records` 换真实组件）
+
+**验收（真实输出，2026-11-05，真实 DB + curl + headless Edge/CDP）**
+- 状态机（`01 §8.3` 五条转移，全部实测）：
+  - 自评 3 → `practice_record`=1、`wrong_record`=(wrong_count=1, resolved=0, last_assess=3, mastered_at NULL)、`question.practice_count` +1
+  - 再评 2 → wrong_count=2、last_assess=2、todayCount=2
+  - 再评 1 → resolved=1、last_assess=1、mastered_at 非空、wrong_count 保持 2
+  - 再评 3 → resolved=0、mastered_at=NULL、last_assess=3、wrong_count=3；q1 practice_count 累计 +4
+  - 从未进过错题本的题自评 1 → `wrongBook=null`，`wrong_record` 行数 0（不建行）
+  - 手动移除分支由 T10 实现
+- `source`：`{"selfAssess":2,"source":3}` → 记录 `source=3`；`/practice-records?selfAssess=1` 筛选 total=1；列表首行 `selfAssess/source/createdAt` 正确
+- 事务：一次 upsert SQL 报错（`Column 'wrong_count' ambiguous`）时，同一事务内已插入的 `practice_record` 与 `practice_count` 全部回滚为 0（**真实失败验证了 02 §5.8 的原子性**）；修复 SQL 后重跑通过
+- 校验：`selfAssess=4` → HTTP 400 `40000`（文案定位字段）；`{}` → HTTP 400 `40000`；`/questions/999/assessment` → 404 `40400`；草稿题（临时 `status=0`）→ 404 `40400`；无 token → 401 `40100`
+- `todayCount` 与 `SELECT COUNT(*) ... created_at >= CURDATE()` 一致（8 == 8）
+- 浏览器：详情页 3 个自评按钮（掌握/模糊/不会）；初始高亮与 `GET /questions/1` 的 `myAssessment` 一致；点击后按钮全部禁用（2s 防抖实测）、`今日已刷 N 题` 出现、2s 后恢复可点；「不会」轻提示「已记录：不会，已加入错题本」；`/records` 表格 10 行、筛选「掌握」生效、来源列显示「详情页/错题本」；375×667 记录页转卡片、无横向滚动 `sw=375/cw=375`、自评按钮高 44px；游客点自评弹「登录后才能自评，去登录？」
+- `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0
+
+**偏离登记**：见 `开发文档/02 §10`（新增 `/practice-records` 控制器与辅助类、T09 提前建 `WrongRecordMapper`、详情页今日数初始无接口来源）。
+
+
 
 
 

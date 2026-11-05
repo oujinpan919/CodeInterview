@@ -87,6 +87,24 @@
         />
       </section>
 
+      <section class="question-detail__card question-detail__assess">
+        <div class="question-detail__assess-head">
+          <h2 class="question-detail__card-title">你觉得自己掌握了吗？</h2>
+          <span v-if="todayCount !== null" class="question-detail__today">
+            今日已刷 {{ todayCount }} 题
+          </span>
+        </div>
+        <AssessmentBar
+          :model-value="myAssessment"
+          :loading="assessLoading"
+          class="question-detail__assess-bar"
+          @change="handleAssess"
+        />
+        <p v-if="!userStore.isLogin" class="question-detail__assess-tip">
+          登录后才能记录自评，点击按钮会先引导登录
+        </p>
+      </section>
+
       <nav class="question-detail__neighbors" aria-label="上一题与下一题">
         <el-button
           class="question-detail__neighbor"
@@ -118,7 +136,9 @@ import {
   getQuestionDetail,
   unfavoriteQuestion
 } from '@/api/question'
+import { submitAssessment } from '@/api/record'
 import { useUserStore } from '@/stores/user'
+import AssessmentBar from '@/components/AssessmentBar.vue'
 import MarkdownView from '@/components/MarkdownView.vue'
 import DifficultyTag from '@/components/DifficultyTag.vue'
 import ErrorState from '@/components/ErrorState.vue'
@@ -136,6 +156,14 @@ const answerExpanded = ref(false)
 // 收藏按钮：乐观更新，失败回滚（04 B4.3 / B5.2）
 const favorited = ref(false)
 const favoriteLoading = ref(false)
+// 三档自评：当前档位来自详情接口 myAssessment；今日数只在自评成功后由响应给出
+const myAssessment = ref(null)
+const todayCount = ref(null)
+const assessLoading = ref(false)
+
+const ASSESS_LABELS = { 1: '掌握', 2: '模糊', 3: '不会' }
+// 从错题本「去复习」进入时 source=3（04 B4.7 / 01 F04）
+const assessSource = computed(() => (route.query.from === 'wrong' ? 3 : 1))
 
 const question = computed(() => (detail.value ? detail.value.question : null))
 const neighbors = computed(() =>
@@ -159,6 +187,7 @@ async function loadDetail() {
     if (seq !== loadSeq) return
     detail.value = data
     favorited.value = Boolean(data.myFavorite)
+    myAssessment.value = data.myAssessment == null ? null : data.myAssessment
     window.scrollTo({ top: 0, behavior: 'auto' })
   } catch (error) {
     if (seq !== loadSeq) return
@@ -220,6 +249,54 @@ async function toggleFavorite() {
     favoriteLoading.value = false
   }
 }
+
+/**
+ * 三档自评（01 F04 / 04 B4.3）：2s 内不清除 loading，成功后高亮档位并给轻提示。
+ * wrongBook 为 null = 从未进过错题本，不提示「已加入错题本」（04 A3.4 #14）。
+ */
+const ASSESS_DEBOUNCE_MS = 2000
+
+async function handleAssess(assess) {
+  if (assessLoading.value) return
+  if (!userStore.isLogin) {
+    try {
+      await ElMessageBox.confirm('登录后才能自评，去登录？', '需要登录', {
+        type: 'info',
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消'
+      })
+    } catch {
+      return
+    }
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  const startedAt = Date.now()
+  assessLoading.value = true
+  try {
+    const data = await submitAssessment(question.value.id, {
+      selfAssess: assess,
+      source: assessSource.value
+    })
+    myAssessment.value = assess
+    if (data && typeof data.todayCount === 'number') todayCount.value = data.todayCount
+    const label = ASSESS_LABELS[assess] || '已记录'
+    const wrongBook = data ? data.wrongBook : null
+    if (wrongBook && wrongBook.resolved === 0) {
+      ElMessage.success(`已记录：${label}，已加入错题本`)
+    } else if (wrongBook && wrongBook.resolved === 1) {
+      ElMessage.success('已记录：掌握')
+    } else {
+      ElMessage.success(`已记录：${label}`)
+    }
+  } catch (error) {
+    ElMessage.error((error && error.message) || '记录失败，请重试')
+  } finally {
+    const remain = ASSESS_DEBOUNCE_MS - (Date.now() - startedAt)
+    if (remain > 0) await new Promise((resolve) => setTimeout(resolve, remain))
+    assessLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -272,6 +349,31 @@ async function toggleFavorite() {
   min-height: 44px;
   padding: 0 var(--space-5);
   border-radius: var(--radius-button);
+}
+
+.question-detail__assess-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.question-detail__today {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+  line-height: var(--line-height-aux);
+}
+
+.question-detail__assess-bar {
+  margin-top: var(--space-4);
+}
+
+.question-detail__assess-tip {
+  margin-top: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+  line-height: var(--line-height-aux);
 }
 
 .question-detail__card {
