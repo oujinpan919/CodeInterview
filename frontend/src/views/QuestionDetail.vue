@@ -137,6 +137,7 @@ import {
   unfavoriteQuestion
 } from '@/api/question'
 import { submitAssessment } from '@/api/record'
+import { getStatsOverview } from '@/api/stats'
 import { useUserStore } from '@/stores/user'
 import AssessmentBar from '@/components/AssessmentBar.vue'
 import MarkdownView from '@/components/MarkdownView.vue'
@@ -165,6 +166,16 @@ const ASSESS_LABELS = { 1: '掌握', 2: '模糊', 3: '不会' }
 // 从错题本「去复习」进入时 source=3（04 B4.7 / 01 F04）
 const assessSource = computed(() => (route.query.from === 'wrong' ? 3 : 1))
 
+/** 今日已刷数首屏展示（04 B4.3）：用已有统计接口取，失败不影响详情。 */
+async function loadTodayCount() {
+  try {
+    const data = await getStatsOverview()
+    if (data && typeof data.todayCount === 'number') todayCount.value = data.todayCount
+  } catch {
+    // 统计失败只影响该文案，不阻塞题干/答案/自评
+  }
+}
+
 const question = computed(() => (detail.value ? detail.value.question : null))
 const neighbors = computed(() =>
   detail.value && detail.value.neighbors ? detail.value.neighbors : { prevId: null, nextId: null }
@@ -188,6 +199,7 @@ async function loadDetail() {
     detail.value = data
     favorited.value = Boolean(data.myFavorite)
     myAssessment.value = data.myAssessment == null ? null : data.myAssessment
+    if (userStore.isLogin) loadTodayCount()
     window.scrollTo({ top: 0, behavior: 'auto' })
   } catch (error) {
     if (seq !== loadSeq) return
@@ -272,13 +284,15 @@ async function handleAssess(assess) {
     return
   }
   const startedAt = Date.now()
+  const previous = myAssessment.value
+  // 乐观把档位切到被点的那档，AssessmentBar 的 loading 才会落在该按钮上（失败回滚）
+  myAssessment.value = assess
   assessLoading.value = true
   try {
     const data = await submitAssessment(question.value.id, {
       selfAssess: assess,
       source: assessSource.value
     })
-    myAssessment.value = assess
     if (data && typeof data.todayCount === 'number') todayCount.value = data.todayCount
     const label = ASSESS_LABELS[assess] || '已记录'
     const wrongBook = data ? data.wrongBook : null
@@ -290,6 +304,7 @@ async function handleAssess(assess) {
       ElMessage.success(`已记录：${label}`)
     }
   } catch (error) {
+    myAssessment.value = previous
     ElMessage.error((error && error.message) || '记录失败，请重试')
   } finally {
     const remain = ASSESS_DEBOUNCE_MS - (Date.now() - startedAt)

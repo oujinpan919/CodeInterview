@@ -294,6 +294,23 @@
 
 **偏离登记**：见 `开发文档/02 §10`（新增 `StatsMapper` 与辅助 VO、指标卡共用单接口的失败表现、图表色 token 落在 base.css）。
 
+### B1 检查点（T08–T11 学习闭环）✅
+
+**浏览器全链路（headless Edge/CDP，真实接口与真实 DB）16/16 通过**
+- 登录 → 详情页「今日已刷 22 题」首屏可见 → 收藏 q1（★ 已收藏）→ 我的收藏 3 条可见 → 自评「模糊」（提示「已加入错题本」）→ 错题本出现 q1 且档位=模糊 → 去复习（`?from=wrong`）→ 改评「掌握」→ 未掌握 tab 消失、已掌握 tab 出现且档位=掌握 → 刷题记录页 5 指标卡（24 | 24 | 29% | 1 天 | 3）+ 两张 ECharts + 记录列表 10 行
+- 375×667：收藏 / 错题本 / 刷题记录均无横向滚动（`scrollWidth=375, clientWidth=375`）
+- 自评按钮：点非当前档位时该按钮立即 loading、三个按钮全部禁用、2s 后恢复；「今日已刷」随自评更新（25→27）
+
+**代码审查（code-review，fixed point `8465c78` = T07 提交）**
+- **Standards 轴** 发现 7 项，已修 5 项：分页归一化散落 5 处（新增 `common/util/PageUtil` 统一，Controller 不再归一化）、`markResolved` 与 `markMastered` 两条相同 UPDATE（删除前者复用后者）、图表轴色写死十六进制（改读 `--color-border`/`--color-text-secondary`）、切页用 `window.scrollTo`（改 `scrollIntoView`）、自评 loading 只覆盖当前档位（改乐观切档位）。2 项按判断保留并登记 02 §10：`attachTags` 三份（单题/批量语义不同）、新增 DTO/VO 未加 `@Schema`（全仓既有类一致，springdoc 默认关闭）。
+- **Spec 轴** 确认 2 项并修复：详情页「今日已刷」首屏缺失（改调 `GET /stats/overview`，不新增接口）、错题本标记掌握遇 40400 未刷新列表（已补 `loadList`）。1 项属 T16（「问助手」按钮），不计本段。scope creep 2 项已处理：删除未使用的 `getNeighbors` 封装；`BaseChart.ariaLabel` 作为无障碍可选 prop 保留并登记。
+- 逐项裁决与偏离记录见 `开发文档/02 §10`（2026-11-05 review 行）。
+
+**回归**：T09 浏览器 18/18、B1 闭环 16/16；`mvn -q clean package -DskipTests`、`npm run lint`、`npm run build` 全绿。
+
+**数据说明**：为 B1 验证，3 道 seed 题临时置为发布态（临时 `published_at`），B2 结束后还原为 seed 草稿态。
+
+
 
 
 

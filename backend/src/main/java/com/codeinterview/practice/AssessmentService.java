@@ -38,7 +38,7 @@ public class AssessmentService {
     public AssessmentResp assess(Long userId, Long questionId, AssessmentReq req) {
         int selfAssess = normalizeAssess(req.getSelfAssess());
         // 仅发布态可自评（01 F04）；草稿/下架/已删除统一 40400，不暴露存在性
-        if (questionMapper.selectPublishedDetail(questionId) == null) {
+        if (questionMapper.countPublished(questionId) == 0) {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
         int source = normalizeSource(req.getSource());

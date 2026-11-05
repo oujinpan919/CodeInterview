@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import com.codeinterview.question.dto.QuestionQueryReq;
@@ -34,6 +35,10 @@ public interface QuestionMapper {
 
     @Update("UPDATE question SET practice_count = practice_count + 1 WHERE id = #{id} AND deleted = 0")
     int increasePracticeCount(@Param("id") Long id);
+
+    /** 发布态存在性判断（自评/收藏前置校验）：只查 COUNT，不拉整行。 */
+    @Select("SELECT COUNT(*) FROM question WHERE id = #{id} AND status = 1 AND deleted = 0")
+    int countPublished(@Param("id") Long id);
 
     int increaseViewCount(@Param("id") Long id);
 }

@@ -25,9 +25,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PracticeRecordController {
 
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 50;
-
     private final PracticeRecordService practiceRecordService;
 
     @Operation(summary = "刷题记录（可按 selfAssess 筛选，按时间倒序）")
@@ -37,10 +34,6 @@ public class PracticeRecordController {
             @RequestParam(required = false) Integer pageSize,
             @RequestParam(required = false) Integer selfAssess) {
         Long userId = StpUtil.getLoginIdAsLong();
-        int normalizedPage = page == null || page < 1 ? 1 : page;
-        int normalizedSize = pageSize == null || pageSize < 1
-                ? DEFAULT_PAGE_SIZE
-                : Math.min(pageSize, MAX_PAGE_SIZE);
-        return Result.success(practiceRecordService.page(userId, normalizedPage, normalizedSize, selfAssess));
+        return Result.success(practiceRecordService.page(userId, page, pageSize, selfAssess));
     }
 }

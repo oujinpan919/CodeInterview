@@ -10,9 +10,9 @@ import org.springframework.stereotype.Service;
 import com.codeinterview.common.exception.BusinessException;
 import com.codeinterview.common.result.PageResp;
 import com.codeinterview.common.result.ResultCode;
+import com.codeinterview.common.util.PageUtil;
 import com.codeinterview.favorite.vo.FavoriteQuestionResp;
 import com.codeinterview.question.QuestionMapper;
-import com.codeinterview.question.vo.QuestionDetail;
 import com.codeinterview.question.vo.QuestionTagRow;
 import com.codeinterview.question.vo.TagBriefResp;
 
@@ -26,10 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 public class FavoriteService {
-
-    private static final int DEFAULT_PAGE = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 50;
 
     private final FavoriteMapper favoriteMapper;
     private final QuestionMapper questionMapper;
@@ -47,24 +43,21 @@ public class FavoriteService {
     }
 
     public PageResp<FavoriteQuestionResp> page(Long userId, Integer rawPage, Integer rawPageSize) {
-        int page = rawPage == null || rawPage < 1 ? DEFAULT_PAGE : rawPage;
-        int pageSize = rawPageSize == null || rawPageSize < 1
-                ? DEFAULT_PAGE_SIZE
-                : Math.min(rawPageSize, MAX_PAGE_SIZE);
+        int page = PageUtil.normalizePage(rawPage);
+        int pageSize = PageUtil.normalizePageSize(rawPageSize);
         long total = favoriteMapper.countByUser(userId);
         if (total == 0) {
             return PageResp.of(page, pageSize, 0, List.of());
         }
-        long offset = (long) (page - 1) * pageSize;
-        List<FavoriteQuestionResp> list = favoriteMapper.selectPageByUser(userId, offset, pageSize);
+        List<FavoriteQuestionResp> list =
+                favoriteMapper.selectPageByUser(userId, PageUtil.offset(page, pageSize), pageSize);
         attachTags(list);
         return PageResp.of(page, pageSize, total, list);
     }
 
     /** 未发布/草稿/下架/已删除都按 40400 处理（01 §4.4：不暴露存在性）。 */
     private void requirePublishedQuestion(Long questionId) {
-        QuestionDetail question = questionMapper.selectPublishedDetail(questionId);
-        if (question == null) {
+        if (questionMapper.countPublished(questionId) == 0) {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
     }

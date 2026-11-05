@@ -1,5 +1,5 @@
 <template>
-  <section class="wrong-book">
+  <section ref="topRef" class="wrong-book">
     <header class="wrong-book__head">
       <h1 class="wrong-book__title">错题本</h1>
       <p class="wrong-book__hint">自评「模糊」或「不会」的题会自动收进来，掌握后移出</p>
@@ -23,8 +23,8 @@
 
       <EmptyState
         v-else-if="items.length === 0"
-        :title="tab === 'unresolved' ? '错题本是空的，去刷几道题吧' : '还没有已掌握的错题'"
-        :description="tab === 'unresolved' ? '自评「模糊」或「不会」后会出现在这里' : '把错题标记掌握后会归档到这里'"
+        :title="emptyTitle"
+        :description="emptyDescription"
         action-text="去刷题"
         @action="goQuestionList"
       />
@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMediaQuery } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -181,6 +181,7 @@ const ASSESS_TYPES = { 1: 'success', 2: 'warning', 3: 'danger' }
 
 const router = useRouter()
 const isMobile = useMediaQuery('(max-width: 767px)')
+const topRef = ref(null)
 
 const tab = ref('unresolved')
 const items = ref([])
@@ -189,6 +190,13 @@ const page = ref(1)
 const loading = ref(false)
 const loadError = ref('')
 const actingId = ref('')
+
+const emptyTitle = computed(() =>
+  tab.value === 'unresolved' ? '错题本是空的，去刷几道题吧' : '还没有已掌握的错题'
+)
+const emptyDescription = computed(() =>
+  tab.value === 'unresolved' ? '自评「模糊」或「不会」后会出现在这里' : '把错题标记掌握后会归档到这里'
+)
 
 let loadSeq = 0
 
@@ -231,7 +239,8 @@ function handleTabChange() {
 function handlePageChange(next) {
   page.value = next
   loadList()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  // 04 B5.2：切页后滚动到内容区顶部（scrollIntoView）
+  if (topRef.value) topRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 /** 去复习带 ?from=wrong，详情页据此传 source=3（04 B4.7 / 01 F04） */
@@ -254,6 +263,10 @@ async function markMastered(row) {
       await loadList()
     }
   } catch (error) {
+    // 04 A3.4 #17：无记录返回 40400，前端刷新列表
+    if (error && error.code === 40400) {
+      await loadList()
+    }
     ElMessage.error((error && error.message) || '操作失败，请重试')
   } finally {
     actingId.value = ''

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.codeinterview.common.exception.BusinessException;
 import com.codeinterview.common.result.PageResp;
 import com.codeinterview.common.result.ResultCode;
+import com.codeinterview.common.util.PageUtil;
 import com.codeinterview.question.dto.QuestionQueryReq;
 import com.codeinterview.question.vo.NeighborResp;
 import com.codeinterview.question.vo.QuestionBriefResp;
@@ -29,9 +30,6 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class QuestionService {
 
-    private static final int DEFAULT_PAGE = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 50;
     private static final int MAX_KEYWORD_LENGTH = 30;
     private static final String SORT_HOT = "hot";
     private static final String SORT_LATEST = "latest";
@@ -107,12 +105,8 @@ public class QuestionService {
 
     private QuestionQueryReq normalize(QuestionQueryReq rawQuery) {
         QuestionQueryReq query = rawQuery == null ? new QuestionQueryReq() : rawQuery;
-        query.setPage(query.getPage() == null || query.getPage() < 1 ? DEFAULT_PAGE : query.getPage());
-        if (query.getPageSize() == null || query.getPageSize() < 1) {
-            query.setPageSize(DEFAULT_PAGE_SIZE);
-        } else {
-            query.setPageSize(Math.min(query.getPageSize(), MAX_PAGE_SIZE));
-        }
+        query.setPage(PageUtil.normalizePage(query.getPage()));
+        query.setPageSize(PageUtil.normalizePageSize(query.getPageSize()));
         if (query.getCategoryId() != null && query.getCategoryId() <= 0) {
             query.setCategoryId(null);
         }

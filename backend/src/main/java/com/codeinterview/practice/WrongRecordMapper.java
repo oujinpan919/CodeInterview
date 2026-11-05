@@ -84,19 +84,6 @@ public interface WrongRecordMapper {
                                                  @Param("offset") long offset,
                                                  @Param("size") int size);
 
-    /**
-     * T10 手动「标记掌握」（03 §4.2）：三列必须一起写，且不改 wrong_count。
-     * 影响行数 0 表示无该用户的行（从未进过错题本，或属于别的用户，由 Service 区分 40400/40300）。
-     */
-    @Update("""
-            UPDATE wrong_record
-            SET last_assess = 1, resolved = 1, mastered_at = #{now}, updated_at = #{now}
-            WHERE user_id = #{userId} AND question_id = #{questionId}
-            """)
-    int markResolved(@Param("userId") Long userId,
-                     @Param("questionId") Long questionId,
-                     @Param("now") LocalDateTime now);
-
     /** 该题是否存在任意用户的错题行：用于区分「无记录 40400」与「越权 40300」。 */
     @Select("SELECT COUNT(*) FROM wrong_record WHERE question_id = #{questionId}")
     long countAnyByQuestion(@Param("questionId") Long questionId);

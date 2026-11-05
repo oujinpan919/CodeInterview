@@ -1,5 +1,5 @@
 <template>
-  <section class="records">
+  <section ref="topRef" class="records">
     <header class="records__head">
       <h1 class="records__title">刷题记录</h1>
     </header>
@@ -185,6 +185,7 @@ const CHART_TOKEN_KEYS = [
 
 const router = useRouter()
 const isMobile = useMediaQuery('(max-width: 767px)')
+const topRef = ref(null)
 
 const overview = ref(null)
 const overviewLoading = ref(true)
@@ -209,9 +210,17 @@ let trendSeq = 0
 let categorySeq = 0
 
 function readChartPalette() {
-  if (typeof window === 'undefined') return []
+  if (typeof window === 'undefined') {
+    return { colors: [], border: 'transparent', textSecondary: 'inherit' }
+  }
   const styles = window.getComputedStyle(document.documentElement)
-  return CHART_TOKEN_KEYS.map((key) => styles.getPropertyValue(key).trim()).filter(Boolean)
+  const read = (key) => styles.getPropertyValue(key).trim()
+  return {
+    colors: CHART_TOKEN_KEYS.map((key) => read(key)).filter(Boolean),
+    // 轴色也走 base.css token，组件内不写死十六进制（04 B6）
+    border: read('--color-border') || 'transparent',
+    textSecondary: read('--color-text-secondary') || 'inherit'
+  }
 }
 
 const metricCards = computed(() => {
@@ -272,21 +281,21 @@ const categoryEmpty = computed(() => {
 const trendOption = computed(() => {
   const palette = readChartPalette()
   return {
-    color: palette.length ? [palette[0]] : undefined,
+    color: palette.colors.length ? [palette.colors[0]] : undefined,
     tooltip: { trigger: 'axis', valueFormatter: (value) => `${value} 次` },
     grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: trend.value.map((point) => point.date.slice(5)),
-      axisLine: { lineStyle: { color: '#e5e7eb' } },
-      axisLabel: { color: '#6b7280' }
+      axisLine: { lineStyle: { color: palette.border } },
+      axisLabel: { color: palette.textSecondary }
     },
     yAxis: {
       type: 'value',
       minInterval: 1,
-      splitLine: { lineStyle: { color: '#e5e7eb' } },
-      axisLabel: { color: '#6b7280' }
+      splitLine: { lineStyle: { color: palette.border } },
+      axisLabel: { color: palette.textSecondary }
     },
     series: [
       {
@@ -305,9 +314,9 @@ const trendOption = computed(() => {
 const categoryOption = computed(() => {
   const palette = readChartPalette()
   return {
-    color: palette.length ? palette : undefined,
+    color: palette.colors.length ? palette.colors : undefined,
     tooltip: { trigger: 'item', formatter: '{b}：{c} 次（{d}%）' },
-    legend: { bottom: 0, type: 'scroll' },
+    legend: { bottom: 0, type: 'scroll', textStyle: { color: palette.textSecondary } },
     series: [
       {
         name: '分类分布',
@@ -408,7 +417,8 @@ function handleFilterChange() {
 function handlePageChange(next) {
   page.value = next
   loadRecords()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  // 04 B5.2：切页后滚动到内容区顶部（scrollIntoView）
+  if (topRef.value) topRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function goQuestionList() {

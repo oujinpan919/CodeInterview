@@ -1,5 +1,5 @@
 <template>
-  <section class="favorites">
+  <section ref="topRef" class="favorites">
     <header class="favorites__head">
       <h1 class="favorites__title">我的收藏</h1>
       <p class="favorites__count">共 {{ total }} 道</p>
@@ -69,6 +69,7 @@ import 'element-plus/theme-chalk/el-message.css'
 const PAGE_SIZE = 10
 
 const router = useRouter()
+const topRef = ref(null)
 
 const items = ref([])
 const total = ref(0)
@@ -123,7 +124,8 @@ async function removeFavorite(item) {
 function handlePageChange(next) {
   page.value = next
   loadFavorites()
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  // 04 B5.2：切页后滚动到内容区顶部（scrollIntoView）
+  if (topRef.value) topRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function goDetail(question) {

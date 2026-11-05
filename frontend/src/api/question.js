@@ -11,11 +11,6 @@ export function getQuestionDetail(id) {
   return request.get(`/questions/${id}`)
 }
 
-/** 上/下一题（04 A3.3 #10） */
-export function getNeighbors(id) {
-  return request.get(`/questions/${id}/neighbors`)
-}
-
 /** 收藏（04 A3.3 #11）：幂等，重复收藏仍成功 */
 export function favoriteQuestion(id) {
   return request.post(`/questions/${id}/favorite`)
