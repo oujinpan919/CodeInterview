@@ -479,6 +479,36 @@
 
 **偏离登记**：见 `开发文档/02 §10`（`openWithQuestion` 传 `{id,title}`、额度条取「剩余/上限」口径、额度首帧短暂「—/—」、`App.vue` 全局挂载、失败态用 `mock-break` 复验、浏览器验收脚本不入库）
 
+### C1 检查点自检（T14–T16）✅
+
+- 全量后端单测：`mvn -q test` → exit 0；`UpstreamSseParserTest 8` + `MockUpstreamServerTest 10` + `ChatGateTest 8` + `ChatQuotaTest 2` + `ChatStreamTest 5` = **33 tests, 0 failures**（全部 `getResultCode`/事件序列断言通过）
+- 前端：`npm run lint` exit 0；`npm run build` exit 0（`index gzip 72.53 kB`、`shiki gzip 264.46 kB`、`echarts gzip 179.44 kB`）
+- mock profile 启动：`[mock] upstream started: http://127.0.0.1:18080/chat/completions`；`/api/v1/health` → `{"status":"UP","db":"UP"}`
+- 浏览器端到端（headless Edge + CDP，真实接口）：打开题目详情 → 点「问助手」→ 浮窗「已带入：HashMap 的扩容机制是怎样的？」→ 逐字流式（22 个递增采样）→ 定稿后 Shiki 高亮 → 点「停止」标「已停止」→ 额度条「今日剩余 N/30」→ 375×667 全屏且无横向滚动；另有失败态（未完成 + 重新生成）、3s 间隔提示、刷新清空/额度保留、游客登录引导，共 **27 项检查全过**
+- 数据已还原：q1 恢复草稿、AI 三张表清空、仅剩 admin
+
+### T17 · 安全加固 ✅
+
+**改动文件**
+- 新增：`common/interceptor/RateLimitInterceptor.java`、`common/filter/TraceIdFilter.java`、`common/config/WebMvcConfig.java`
+- 修改：`auth/LoginAttemptGuard.java`（周期清理 + 内存上限）、`common/exception/GlobalExceptionHandler.java`（请求方法不支持 → 40000，T17 自查发现的原 500）
+
+**验收（真实输出，2026-11-05）**
+- **读接口限流**：同一 IP 连续 70 次 `GET /api/v1/questions?page=1&pageSize=10` → `status 200 x 60` + `status 429 x 10`；429 响应体 `{"code":42900,"message":"操作太频繁，请稍后再试","data":null}`；响应头 `X-Trace-Id: e01f46e3`；等待 61s 后再请求 → `status=200`（窗口滑动恢复）
+- **traceId**：每条请求日志带 8 位 traceId，格式 `[132c934b] GET /api/v1/admin/tags userId=- costMs=44 status=400`；响应头回写 `X-Trace-Id`；异步 SSE 在 worker 日志里沿用 Controller 捕获的 traceId（T15 已验）
+- **审计日志**：管理员 `QUESTION_CREATE` / `QUESTION_PUBLISH` / `QUESTION_OFFLINE` / `QUESTION_IMPORT` / `QUESTION_DELETE` 各产生 1 条 `audit action=… userId=1 targetId=… result=OK`（带 traceId）
+- **越权自查**：普通用户 token 跑 04 A3.9 全部 15 个已定义管理端接口（question GET/POST/PUT/DELETE/publish/offline/import、categories GET/POST/PUT/DELETE、tags POST/PUT/DELETE）→ **15/15 HTTP 403 + `{"code":40301,"message":"需要管理员权限"}`**；`GET /admin/tags` 不是接口（04 A3.9 只有 POST/PUT/DELETE），原实现因 `HttpRequestMethodNotSupportedException` 落 50000，已修为 400 + 40000「请求方法不支持」
+- **02 §8 禁止清单逐条自查**：
+  - 依赖仅 §5.1 白名单 10 项（web/validation/mybatis-plus×2/sa-token/mysql/springdoc/hutool/lombok/test）
+  - `WebClient|Reactor|Flux|RedisTemplate|redisson|knife4j|flyway|actuator|rabbitmq|kafka|elasticsearch` → NO HITS
+  - `System.out|printStackTrace` → NO HITS
+  - `git grep -nE "(sk|ak)-[A-Za-z0-9]{16,}" -- .` → NO HITS
+  - `git check-ignore -v backend/config/application-local.yml` → `.gitignore:2:…` 命中；`git status` 无 `application-local.yml`/`.env`/`logs/`/`target/`
+  - 前端：`element-plus/dist/index.css`、`import * as echarts from 'echarts'`、`shiki/bundle` 均无命中（仅 `echarts/core`）；`Number()`/`parseInt()` 命中项均为额度/JSON 位置等非 id 数值，所有 id 仍是字符串（T20 check.sh 将精确校验 id 转数字）
+- 验证后数据还原：T17 创建/导入的题目、临时标签、`t17user` 全部清理（question=3 / tag=15 / user=1），backend 已停止
+
+**偏离登记**：见 `开发文档/02 §10`（读接口阈值取 06 的 60 次/分钟、`HttpRequestMethodNotSupportedException` 映射 40000、logback 无需改动、traceId 实现方式、登录计数内存上限）
+
 
 
 

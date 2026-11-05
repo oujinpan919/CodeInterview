@@ -14,6 +14,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
@@ -66,6 +67,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Result<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return build(ResultCode.PARAM_ERROR, "参数格式错误: " + ex.getName());
+    }
+
+    /** 路径存在但方法不支持（如 GET /admin/tags）：按参数错误而不是 500 返回，避免泄漏栈/状态混淆。 */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Result<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        log.warn("request method not supported: {} {}", ex.getMethod(), ex.getMessage());
+        return build(ResultCode.PARAM_ERROR, "请求方法不支持");
     }
 
     @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
