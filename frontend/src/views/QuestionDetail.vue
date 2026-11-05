@@ -60,6 +60,7 @@
         >
           {{ favorited ? '★ 已收藏' : '☆ 收藏' }}
         </el-button>
+        <el-button class="question-detail__action" @click="askAssistant">问助手</el-button>
       </div>
 
       <section class="question-detail__card">
@@ -138,6 +139,7 @@ import {
 } from '@/api/question'
 import { submitAssessment } from '@/api/record'
 import { getStatsOverview } from '@/api/stats'
+import { useAssistantStore } from '@/stores/assistant'
 import { useUserStore } from '@/stores/user'
 import AssessmentBar from '@/components/AssessmentBar.vue'
 import MarkdownView from '@/components/MarkdownView.vue'
@@ -148,6 +150,7 @@ import NotFound from '@/views/NotFound.vue'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const assistantStore = useAssistantStore()
 
 const loading = ref(true)
 const loadError = ref('')
@@ -260,6 +263,28 @@ async function toggleFavorite() {
   } finally {
     favoriteLoading.value = false
   }
+}
+
+/**
+ * 问助手（04 B4.3）：浮窗展开并带入当前题目；未登录先引导登录。
+ * 题干由服务端按 questionId 查库拼进 prompt，前端只传 id + 标题用于提示条。
+ */
+async function askAssistant() {
+  if (!question.value) return
+  if (!userStore.isLogin) {
+    try {
+      await ElMessageBox.confirm('登录后才能使用 AI 助手，去登录？', '需要登录', {
+        type: 'info',
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消'
+      })
+    } catch {
+      return
+    }
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  assistantStore.openWithQuestion({ id: question.value.id, title: question.value.title })
 }
 
 /**
@@ -464,6 +489,16 @@ async function handleAssess(assess) {
 @media (max-width: 767px) {
   .question-detail__card {
     padding: var(--space-4);
+  }
+
+  .question-detail__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .question-detail__action {
+    width: 100%;
+    margin-left: 0;
   }
 
   .question-detail__neighbors {

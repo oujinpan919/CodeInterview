@@ -450,6 +450,35 @@
 
 **偏离登记**：见 `开发文档/02 §10`（SSE 单测方式、mock 随机端口、新增 Mapper/实体/出参/映射类、流前 JSON 内容协商、客户端断开异常、sessionId 入参、complete 时机、闸门间隔推进、已出字失败按估算计 tokens）
 
+### T16 · 前端助手浮窗与流式渲染 ✅
+
+**改动文件**
+- 前端（新增）：`src/components/AssistantPanel.vue`、`src/stores/assistant.js`、`src/utils/sse.js`、`src/api/ai.js`
+- 前端（修改）：`src/App.vue`（全站挂载浮窗）、`src/views/QuestionDetail.vue`（操作行「问助手」按钮 + 移动端两列布局）
+
+**实现要点**
+- `utils/sse.js`：`fetch` + `ReadableStream`（禁 EventSource/axios），按空行切事件块；非 2xx 抛 `{code,http}` 由 store 映射文案
+- store 状态机：`idle → connecting → streaming → done`，失败 `failed`、停止 `aborted`；会话只在内存，刷新清空；`sessionId` 页面生命周期内复用
+- 流中纯文本追加（`v-text`），收到 `done` 后整段交 `MarkdownView`（marked → Shiki → DOMPurify）
+- 停止用 `AbortController`；失败保留已收文本并给「重新生成」；3s 间隔/空串/超 2000 字/额度用尽本地就地提示、不发请求
+- 浮窗：380×520、右下 24px；`<768` 全屏 `100dvh` + 安全区；带入题干提示条可取消；三条示例问法；`今日剩余 N/30`；Enter 发送 / Shift+Enter 换行；字数 `n/2000`；固定「AI 生成，仅供参考」
+
+**验收（真实输出，2026-11-05，headless Edge + CDP 真实接口）**
+- `npm run lint` → exit 0；`npm run build` → exit 0（`index-*.js 211.33 kB │ gzip: 72.53 kB`、`shiki gzip 264.46 kB`、`echarts gzip 179.44 kB`）
+- 桌面链路 27 项检查全过（phase1 12/12 有效项、phase2b 3/3、phase3 12/12）：
+  - 详情页出现「问助手」→ 点击后浮窗打开，顶部「已带入：HashMap 的扩容机制是怎样的？」；打开即请求额度条
+  - `mock-ok` 逐字：客户端每 100ms 采样文本长度得到 22 个不同长度（0 → 406），不是一次性出现；首字后 2.9s 内完成整条流
+  - 定稿后出现 `.markdown-body`，代码块 `.shiki` 高亮就绪；额度条由「今日剩余 —/—」更新为「今日剩余 29/30」
+  - 流中按钮变「停止」→ 点击后气泡标「已停止」且保留已收文本（length=107）；额度按已出字计 1 条不返还
+  - 停止后立刻再发 → 就地提示「请稍后再试（两次提问间隔 3 秒）」，user 气泡数 2→2（不产生新气泡）
+  - 上游中途断流（`mock-break`）→ 气泡标「未完成」（length=60，保留已收文本）+ 提示「AI 响应超时，请重试」+「重新生成」按钮
+  - 刷新页面 → 浮窗收起、消息数 0（空态示例问法），额度条重新拉取为「今日剩余 22/30」
+  - 375×667：浮窗 `width=375 height=667 viewportWidth=375 scrollWidth=375`，textarea 高 44、发送按钮高 44；可正常输入；详情页 `scrollWidth=375`
+  - 游客点浮窗 → `ElMessageBox`「登录后才能使用 AI 助手，去登录？」；取消后不打开面板
+- 验证后数据还原：q1 恢复草稿（`status=0, published_at=NULL, view_count=0`）、`user_ai_quota`/`site_ai_usage`/`ai_chat_log` 清空、仅剩 admin；临时 CDP 脚本与截图已删除（不入库）
+
+**偏离登记**：见 `开发文档/02 §10`（`openWithQuestion` 传 `{id,title}`、额度条取「剩余/上限」口径、额度首帧短暂「—/—」、`App.vue` 全局挂载、失败态用 `mock-break` 复验、浏览器验收脚本不入库）
+
 
 
 
