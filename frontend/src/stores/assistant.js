@@ -63,7 +63,7 @@ export const useAssistantStore = defineStore('assistant', () => {
 
   const isStreaming = computed(() => state.value === 'connecting' || state.value === 'streaming')
   const quotaExhausted = computed(
-    () => Boolean(quota.value) && Number(quota.value.remaining) <= 0
+    () => Boolean(quota.value) && (quota.value.remaining ?? 1) <= 0
   )
 
   function resetSession() {
@@ -114,8 +114,8 @@ export const useAssistantStore = defineStore('assistant', () => {
   function applyQuota(payload) {
     if (!payload) return
     const current = quota.value || {}
-    const limit = Number(payload.limit || current.dailyLimit || 30)
-    const used = Number(payload.used || 0)
+    const limit = payload.limit ?? current.dailyLimit ?? 30
+    const used = payload.used ?? 0
     quota.value = {
       ...current,
       dailyLimit: limit,

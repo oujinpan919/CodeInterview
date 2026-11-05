@@ -305,7 +305,7 @@ function pickQueryString(value) {
   return typeof value === 'string' ? value : ''
 }
 
-// 不用 Number()/parseInt()（02 §8 id 红线检查的同款约束），page 是纯数字串
+// 02 §8：id 一律保持字符串，不做数值转换；page 是纯数字串，这里只做正整数归一
 function toPositivePage(value) {
   const raw = pickQueryString(value)
   if (!/^\d+$/.test(raw)) return 1

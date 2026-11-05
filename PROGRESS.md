@@ -12,6 +12,8 @@
 | A3 题库只读 | T05 / T06 / T07 | ✅ 通过（首页/列表/详情/代码高亮/登录/刷新保持，浏览器实测） |
 | B1 学习闭环 | T08 / T09 / T10 / T11 | ✅ 通过（收藏→错题→掌握→统计，浏览器 16/16；code-review 已完成） |
 | B2 管理端 | T12 / T13 | ✅ 通过（分类标签/导入/建题发布下架，浏览器 11/11；code-review 已完成） |
+| C1 AI 助手 | T14 / T15 / T16 | ✅ 通过（mock 上游→SSE→浮窗流式/停止/额度，33 单测 + 27 项浏览器检查） |
+| C2 加固与交付 | T17 / T18 / T19 / T20 | ✅ 通过（限流/traceId/审计/部署/演示数据/移动端/全量回归；39 单测 + check.sh 全绿 + AC-01~17） |
 
 ## 卡片记录
 
@@ -582,6 +584,53 @@
 - 桌面「与改前一致」以「导航 5 项 / main 1200 / 无横向滚动 + 截图」度量验收（仓库无改前截图基线）。
 
 **偏离登记**：见 `开发文档/02 §10`（移动端头像 44、守卫只对 401 清态、真机以设备模拟替代、桌面回归方式、巡检范围、巡检限流 600）
+
+### T20 · 回归与交付前全量自检 ✅
+
+**改动文件**
+- 新增：`scripts/check.sh`（11 项静态红线自查）、`开发文档/ACCEPTANCE.md`（AC-01~AC-17 映射表）
+- 前端按红线要求调整数值写法（均为**非 id** 数值，行为不变）：`AssistantPanel.vue` / `stores/assistant.js` / `admin/JsonImportDialog.vue` / `BaseChart.vue`（注释）/ `composables/useMarkdown.js`（注释）/ `views/QuestionList.vue`（注释）
+- `PROGRESS.md`（本卡记录 + 交付总结）
+
+**验收（真实输出，2026-11-05）**
+- `bash scripts/check.sh` → exit 0，**11/11 全绿**：
+  - `id 不得转数字（Number(/parseInt(）`、`v-html 仅允许 MarkdownView 一处`、`未引入 element-plus/dist/index.css`、`未使用 echarts 全量入口（仅 echarts/core + use）`、`未使用 shiki 全量 bundle`、`token 禁止写 localStorage（应为 sessionStorage）`、`仓库内不得出现疑似 API Key（sk-/ak-）`、`后端禁用组件（WebClient/RedisTemplate/knife4j/WebFlux）`、`后端禁用 Reactor Flux`、`application-local.yml / .env 不得入库`
+  - `dist 最大 JS gzip ≤300KB（shiki-CQthJHHG.js gzip=265486B）`
+- `cd backend && mvn -q test` → exit 0，**39 个真实用例 0 失败**：`ImportServiceTest 4` + `UpstreamSseParserTest 8` + `ChatGateTest 8` + `ChatQuotaTest 2` + `ChatStreamTest 5` + `AssessmentStateMachineTest 2` + `MockUpstreamServerTest 10`（覆盖 05 §12 #1–#13、#15 与 01 §8.3 状态机、03 §7.3 导入分支）
+- `npm run lint` exit 0；`npm run build` exit 0（`index 72.55 kB gzip`、`echarts 179.44 kB gzip`、`shiki 264.46 kB gzip`，最大 gzip < 300KB）
+- 最终接口冒烟：`/api/v1/health` → `{"status":"UP","db":"UP"}`；`/questions` → `total=18`、id 为字符串；`/home` → latest=6 / hot=6 / categories=5；`admin/123456` 登录成功；`/ai/chat`（mock）→ `http=200 first_byte=0.048s total=2.687s`、20 段 delta + done、`ai_chat_log.status=1`
+- 交付前密钥检查：`git check-ignore -v backend/config/application-local.yml` 命中；`git grep -nE "(sk|ak)-[A-Za-z0-9]{16,}" -- .` 无输出；`git status` 无 local yml/.env/logs/target/backups
+- **AC-01~AC-17 全表通过**（映射与逐条命令见 `开发文档/ACCEPTANCE.md`；T18 实测 AC-01~16、T19 实测 AC-17）
+
+**偏离登记**：见 `开发文档/02 §10`（check.sh 检查口径、前端非 id 数值写法、构建体积、ACCEPTANCE.md 新增）
+
+---
+
+## 【交付总结 · 会话 C（T14–T20）】
+
+- **状态**：20 张卡全部完成，A1/A2/A3/B1/B2/C1/C2 七个检查点全部通过；交付前 `mvn -q test`（39 用例）、`npm run lint`、`npm run build`、`bash scripts/check.sh`（11 项）全绿。
+- **提交记录**（由新到旧，7 条）：
+  ```
+  feat(T20): 回归与交付前全量自检（check.sh + ACCEPTANCE + 红线修复）
+  feat(T19): 移动端适配巡检与修复（触控目标/会话恢复错误口径）
+  feat(T18): 部署、演示数据与验收（Nginx/Dockerfile/backup.sh/seed-demo/AC 回归测试）
+  feat(T17): 安全加固（读接口限流/traceId/登录计数清理/方法不支持映射 40000）
+  feat(T16): 前端 AI 助手浮窗与流式渲染（带入题干/停止/额度/错误态）
+  feat(T15): 配额/限流 + /ai/chat SSE（闸门/预扣/回滚/心跳/watchdog/审计）
+  feat(T14): mock 上游 + 上游客户端（thinking 关闭 / code 逐行校验 / 忽略 reasoning_content / HIDE_CONTINUE 跳过）
+  ```
+- **交付物**：可运行的 Vue3 SPA + Spring Boot 单 jar + MySQL；`db/init.sql` + `db/seed-demo.sql`（18 道演示题 + admin/demo 账号 + 自评/错题/收藏）；`nginx/default.conf` + `backend/Dockerfile` + `scripts/backup.sh` + `.env.example`；`scripts/check.sh` + `开发文档/ACCEPTANCE.md`；README 含开发/部署/备份/验证步骤。
+- **本机演示数据现状**：`question=21（status=1:18）`、`user=2（admin/demo，密码 123456）`、`practice_record=17`、`wrong_record=8`、`user_favorite=4`、`category=5`、`tag=15`；AI 三张表清空（额度从 0 开始）。
+- **已知限制 / 待站长确认项**：
+  1. **真机一次待站长**：AC-17 的「真机（同局域网）至少一台手机」Agent 无物理手机，已用 headless Edge 375/414/768/1440 + 触屏模拟覆盖；部署后请用手机访问 `http://<本机IP>:80` 走一遍登录→自评→浮窗。
+  2. **真实 Key 语义抽查**：全程 mock 上游；AC-11「回答能引用题干」只验证了结构链路（questionId → 服务端查库拼 prompt），拿到真实讯飞 Key 后建议手工抽查一次；请求体已固定 `thinking: disabled`。
+  3. **部署验收 profile**：T18 用 `--spring.profiles.active=mock` 起 jar（本机无真实 Key），生产用 `prod` + `.env`；HTTPS/域名/备案按 V1 边界不做。
+  4. **Dockerfile 未构建**：本机 Docker 守护进程不可用，镜像只交付未 `docker build`；V1 实际部署用 Nginx + jar + 本机 MySQL。
+  5. **读接口限流 60 次/分钟**（06 T17 验收口径，与 01/02 的 120 冲突已登记）；高频自动化浏览需临时调高（T19 用 600）。
+  6. **演示账号密码 123456**：seed-demo 固定哈希；给他人访问或公网前必须改 admin 密码并清空 `init-password`。
+  7. Sa-Token 内存会话：重启后端后 token 失效需重登（已声明）。
+  8. 既有判断项沿用：`@Schema` 全仓未使用、`attachTags` 多处、首页「继续刷」窗口函数 SQL、个人中心「注册时间」暂无数据源等，均见 `开发文档/02 §10`。
+- **恢复/复核入口**：`README.md` §7 部署步骤；`开发文档/ACCEPTANCE.md` 逐条命令；`bash scripts/check.sh`；`mvn -q test`。
 
 
 

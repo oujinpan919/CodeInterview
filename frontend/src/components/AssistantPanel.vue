@@ -163,10 +163,10 @@ const stickToBottom = ref(true)
 
 const isAuthPage = computed(() => route.path === '/login' || route.path === '/register')
 const quotaRemaining = computed(() =>
-  store.quota && Number.isFinite(Number(store.quota.remaining)) ? store.quota.remaining : '—'
+  store.quota && typeof store.quota.remaining === 'number' ? store.quota.remaining : '—'
 )
 const quotaLimit = computed(() =>
-  store.quota && Number.isFinite(Number(store.quota.dailyLimit)) ? store.quota.dailyLimit : '—'
+  store.quota && typeof store.quota.dailyLimit === 'number' ? store.quota.dailyLimit : '—'
 )
 const inputPlaceholder = computed(() =>
   store.quotaExhausted ? '今日额度已用完' : '问问 AI 助手…（Enter 发送，Shift+Enter 换行）'

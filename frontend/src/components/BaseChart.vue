@@ -15,7 +15,7 @@ import { LineChart, PieChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-// 04 B6 / T11 要点 4：echarts/core + 显式 use，禁止 import * as echarts from 'echarts'
+// 04 B6 / T11 要点 4：echarts/core + 显式 use，禁止使用全量默认入口
 echarts.use([LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
 const props = defineProps({

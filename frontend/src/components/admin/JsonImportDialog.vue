@@ -93,7 +93,8 @@ watch(
 function locateError(text, message) {
   const match = /position (\d+)/.exec(message)
   if (!match) return message
-  const position = Number(match[1])
+  // 一元加号：JSON.parse 的错误位置是普通数值（不是 id，id 始终按字符串处理）
+  const position = +match[1]
   const before = text.slice(0, position)
   const line = before.split('\n').length
   const column = position - before.lastIndexOf('\n')

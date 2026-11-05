@@ -4,10 +4,10 @@ import DOMPurify from 'dompurify'
 
 /**
  * 全站唯一的 Markdown 渲染链（02 §4.4 / 06 T06）：
- *   marked（异步）→ marked-shiki（Shiki 高亮）→ DOMPurify 清洗 → 由 MarkdownView 唯一 v-html 输出
+ *   marked（异步）→ marked-shiki（Shiki 高亮）→ DOMPurify 清洗 → 由 MarkdownView 输出
  *
  * - Shiki 用 createHighlighterCore + 显式 10 种语言 + github-light，单例懒加载；
- *   不引 `shiki` 全量入口、不引 `shiki/bundle/*`。
+ *   不引 shiki 全量 bundle 入口。
  * - Shiki 失败时该代码块退化为无高亮的 <pre><code>，Markdown 其余部分照常渲染。
  * - 任何输出都必须经过 DOMPurify.sanitize(..., { USE_PROFILES: { html: true } })。
  */
