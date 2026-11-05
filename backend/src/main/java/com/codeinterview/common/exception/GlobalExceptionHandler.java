@@ -14,6 +14,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -74,6 +75,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
         log.warn("request method not supported: {} {}", ex.getMethod(), ex.getMessage());
         return build(ResultCode.PARAM_ERROR, "请求方法不支持");
+    }
+
+    /** Accept 与接口 produces 不匹配（如 /ai/chat 不接收 text/event-stream）：客户端错误，不能落 500。 */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Result<Void>> handleMediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException ex) {
+        log.warn("media type not acceptable: {}", ex.getMessage());
+        return build(ResultCode.PARAM_ERROR, "请求头 Accept 不支持该接口");
     }
 
     @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})

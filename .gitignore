@@ -13,6 +13,8 @@ logs/
 backend/target/
 frontend/node_modules/
 frontend/dist/
+# 备份产物（scripts/backup.sh 输出），不入库
+backups/
 .idea/
 *.iml
 .DS_Store

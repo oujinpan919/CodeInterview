@@ -509,6 +509,53 @@
 
 **偏离登记**：见 `开发文档/02 §10`（读接口阈值取 06 的 60 次/分钟、`HttpRequestMethodNotSupportedException` 映射 40000、logback 无需改动、traceId 实现方式、登录计数内存上限）
 
+### T18 · 部署、演示数据与验收 ✅
+
+**改动文件**
+- 新增：`db/seed-demo.sql`、`nginx/default.conf`、`backend/Dockerfile`、`scripts/backup.sh`、`.env.example`
+- 修改：`README.md`（目录/管理员账号说明/新增第 7 节「部署（Nginx + 单 jar + MySQL）」/备份恢复/部署后验证）、`.gitignore`（+ `backups/`）、`common/exception/GlobalExceptionHandler.java`（T18 复验发现的 `HttpMediaTypeNotAcceptableException` 原落 50000 → 40000）
+- 单测（新增）：`test/.../practice/AssessmentStateMachineTest.java`（2 用例）、`test/.../admin/ImportServiceTest.java`（4 用例）
+
+**演示数据（`db/seed-demo.sql`，固定 id + INSERT IGNORE 可重复执行）**
+- 18 道发布题（id 101–118）：Java/MySQL/Redis/前端/操作系统 各 4/3/3/4/4，难度 1/2/3 = 4/9/5；4 道带围栏代码块（java/javascript）
+- 账号：`admin` / `123456`（role=1）、`demo` / `123456`（固定 BCrypt cost=12 哈希；已存在管理员时跳过不覆盖）
+- 自评 17 条（覆盖最近 7 天）、错题 8 条（含 1 条已掌握）、收藏 4 条；题库 `practice_count` 与自评对齐
+- 执行后实测：`question=21（status=1:18）`、`user=2`、`practice_record=17`、`wrong_record=8`、`user_favorite=4`、`question_tag=32`
+
+**部署验收（真实输出，2026-11-05，Windows nginx/1.30.6 + 单 jar + 本机 MySQL，Nginx 8088）**
+- Nginx：`/` → 200（index.html）；`/question/101` → 200 且 body 为 index.html（SPA 回退生效，1228 字节）；`/assets/index-*.js` → 200；响应头含 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`
+- `/api/v1/health` → `{"status":"UP","db":"UP"...}`；`/api/v1/questions?pageSize=50` → `total=18`、`id` 为字符串（"101"）；`/home` → `latest=6 hot=6 categories=5`
+- **SSE 经 Nginx 逐字输出**：Node 直连 `http://localhost:8088/api/v1/ai/chat` → `status=200 content-type=text/event-stream;charset=UTF-8`，**38 个 chunk**，首个 delta 到达 71ms、末 chunk 2544ms（不是一次性），`event:delta=20` + `event:done`
+- 浏览器（headless Edge 经 Nginx 8088）8/8：题库 18 题 & 首页 latest6/hot6 有内容、5 分类入口、详情代码块 `.shiki` 高亮、`admin/123456` UI 登录成功、统计页 5 卡 `["3","13","38%","7 天","11"]`、ECharts canvas=2、XSS 样例 `onerror=0 / script=0`、所有 id 为字符串
+- `bash scripts/backup.sh`（WSL bash）→ `backups/codeinterview_20261105_202020.sql.gz`（12K）；预置的 15 天前旧备份被清理（保留 14 天规则生效）
+- 恢复：`gunzip -c <backup> | mysql … codeinterview_verify` → exit 0；校验 `tables=11 / questions=21 / users=2 / practice=17`；随后 DROP 临时库
+- T18 两个回归单测：`AssessmentStateMachineTest Tests run: 2` + `ImportServiceTest Tests run: 4`，`mvn -q test -Dtest=…` exit 0（状态机五条转移 + 导入 20/2 skipped/单条 failed/51 题拒绝/非法 JSON）
+- 密钥检查：`git check-ignore -v backend/config/application-local.yml` 命中；`git grep -nE "(sk|ak)-[A-Za-z0-9]{16,}"` 无输出；`git status` 无 local yml/.env/logs/target/backups
+- 验收后清理：AC 临时用户/题目/分类/标签、AI 三张表清空；库回到演示态（21 题/18 发布、admin+demo、17 自评、8 错题、4 收藏）；Nginx/jar/Edge 进程停止，临时 Nginx 目录与脚本删除
+
+**AC-01 ~ AC-16 冒烟结果（T18 汇总；T20 会给逐条命令映射）**
+
+| 编号 | 结果 | 证据 |
+|---|---|---|
+| AC-01 | ✅ | Nginx 8088 首页 18 题、详情 101 代码高亮；游客可读（T05/T06 已验答案展开） |
+| AC-02 | ✅ | 注册 200 → 登录 → `/auth/me` 200 → 登出 → 同 token 401 |
+| AC-03 | ✅ | `APP_REGISTER_ENABLED=false` → HTTP 403 + `40300`「注册已关闭，请联系管理员」 |
+| AC-04 | ✅ | 自评序列 wrongBook `0/1 → 0/2 → 1/2 → 0/3`，手动掌握 200、彻底移除 200 |
+| AC-05 | ✅ | `source=3` 写入 `practice_record`（错题本「去复习」） |
+| AC-06 | ✅ | 收藏列表 before=1 → after=0，幂等且物理删除 |
+| AC-07 | ✅ | 新建→发布（status=1）→游客详情 200→下架→游客 404 |
+| AC-08 | ✅ | 导入 20 题 `created=20`，分类/标签自动创建 |
+| AC-09 | ✅ | 非法 JSON 40000、51 题 40000、单条缺答案 `created=1 failed=1 errors[0].index=1` |
+| AC-10 | ✅ | `/ai/chat` 20 delta + done；经 Nginx 38 chunk/2.5s 逐字到达 |
+| AC-11 | ✅ | 带 `questionId=101` 两轮上下文均 200+done（题干由服务端查库拼 system；mock 上游不体现语义） |
+| AC-12 | ✅ | 3s 内第二次 → HTTP 429 + `42901`；额度/并发/全站见 T15 单测 |
+| AC-13 | ✅ | T15：mock-slow 20s → 50202 + 配额回滚；mock-break → error/status=2 计 1 条；T16：未完成 + 重新生成 |
+| AC-14 | ✅ | 普通用户调管理端 → 403 + `40301`；越权操作他人错题 → 403 + `40300` |
+| AC-15 | ✅ | 本卡部署验收全链路（/health UP、首页 18 题、SSE 逐字、备份可恢复）；重启后 token 失效（T16 phase2 实测 401） |
+| AC-16 | ✅ | XSS 样例 DOM 中 `onerror=0/script=0`；所有 id 出参为字符串；Markdown 走 DOMPurify（T06/T11/T15 已验） |
+
+**偏离登记**：见 `开发文档/02 §10`（部署验收用 mock profile、Windows 临时副本验证 Nginx、Dockerfile 未构建、seed-demo 固定 id/哈希与相对时间、`backups/` 加入 gitignore、`HttpMediaTypeNotAcceptableException → 40000`）
+
 
 
 

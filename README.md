@@ -20,10 +20,12 @@ CodeInterview/
 ├── frontend/                # Vue 3 SPA（独立 npm 工程）
 ├── db/
 │   ├── init.sql             # 唯一建表真源（11 张表 + 分类/标签/示例草稿题 seed）
+│   ├── seed-demo.sql        # 演示数据（18 道发布题 + admin/demo 账号 + 自评/错题/收藏）
 │   └── grant.sql.example    # 应用账号与授权模板（复制为 grant.sql 后填密码，不入库）
 ├── docker/                  # MySQL 8.4 容器备选（映射 3307，默认不用）
-├── nginx/                   # 部署用 Nginx 配置（T18 产出）
-├── scripts/                 # 备份 / 红线自查脚本（T18、T20 产出）
+├── nginx/default.conf       # 部署用 Nginx（SPA 回退 + /api 反代 + SSE 独立 location）
+├── backend/Dockerfile       # 后端单 jar 运行镜像
+├── scripts/backup.sh        # MySQL 备份（mysqldump + 日期文件名 + 保留 14 天）
 └── 开发文档/                # 01–07 开发规范与任务卡
 ```
 
@@ -100,6 +102,8 @@ cd frontend
   `admin.init-password` 提供）。**给他人访问或上公网前必须先改密码，并清空 `init-password`。**
 - `prod` profile：初始密码必须通过密码策略（6–32 位，非全同字符、非顺序递增、不等于昵称），否则拒绝建号并打 ERROR。
 - 未配置 `admin.init-password`：跳过建号并打 WARN（不报错）。
+- **演示数据**：执行 `db/seed-demo.sql` 会预先插入 `admin` / `123456` 与 `demo` / `123456`
+  （密码为固定 BCrypt cost=12 哈希）。此时 `AdminInitializer` 检测到已有管理员会跳过建号，密码以 seed 中为准。
 
 ## 5. 端口
 
@@ -125,7 +129,94 @@ cd frontend
 & "D:\Develop\nodejs\npm.cmd" run build
 ```
 
-## 7. 常见问题
+## 7. 部署（单机 Nginx + 单 jar + 本机 MySQL）
+
+> V1 部署形态：**Nginx 托管 `frontend/dist` + 反代 `/api` 到后端 + 本机 MySQL 单实例**。
+> 部署后**仅站长一人访问**（本机或局域网 HTTP），**不做 HTTPS / 域名 / 备案 / 公网开放**（V1.5 才做）。
+> 参考 `nginx/default.conf`、`backend/Dockerfile`、`.env.example`、`scripts/backup.sh`。
+
+### 7.1 一次性准备
+
+```powershell
+# 1) 建库 + 11 张表 + seed（root 执行）
+& "D:\Develop\MySQL\MySQLServer8.0\bin\mysql.exe" -uroot -p --default-character-set=utf8mb4 `
+  -e "source D:/Develop/Agent/projects/CodeInterview/db/init.sql"
+
+# 2) 演示数据（18 道发布题 + admin/demo 账号 + 自评/错题/收藏；在 init.sql 之后执行一次）
+& "D:\Develop\MySQL\MySQLServer8.0\bin\mysql.exe" -uroot -p --default-character-set=utf8mb4 `
+  -e "source D:/Develop/Agent/projects/CodeInterview/db/seed-demo.sql"
+
+# 3) 应用账号与授权（db/grant.sql 已被 gitignore）
+Copy-Item db\grant.sql.example db\grant.sql   # 填密码后：
+& "D:\Develop\MySQL\MySQLServer8.0\bin\mysql.exe" -uroot -p --default-character-set=utf8mb4 `
+  -e "source D:/Develop/Agent/projects/CodeInterview/db/grant.sql"
+```
+
+### 7.2 构建产物
+
+```powershell
+# 前端：产物在 frontend/dist
+cd frontend; & "D:\Develop\nodejs\npm.cmd" ci; & "D:\Develop\nodejs\npm.cmd" run build
+
+# 后端：产物是 backend/target/codeinterview-backend-1.0.0.jar
+cd backend; & "D:\Develop\apache-maven-3.9.16\bin\mvn.cmd" -q clean package -DskipTests
+```
+
+### 7.3 配置 Nginx
+
+1. 把 `frontend/dist/*` 拷到 Nginx 静态目录（配置里的 `root`，默认 `/usr/share/nginx/html`）；
+2. 把 `nginx/default.conf` 放到 `conf.d/`（或 `sites-enabled/`）；
+3. 直接装 Nginx 时把 `upstream` 的 `backend:8080` 改成 `127.0.0.1:8080`；用 Docker 时保持服务名；
+4. `nginx -t && nginx -s reload`。
+
+> 三个必配项（少一个就会出问题）：SPA `try_files … /index.html`、`/api` 反代、
+> **SSE 独立 location**（`proxy_buffering off` + `gzip off` + `proxy_read_timeout 300s`）；
+> 另外 `server` 段必须下发 `X-Forwarded-For`，否则登录锁定/读接口限流会把全站当成一个 IP。
+
+### 7.4 启动后端
+
+```powershell
+# 方式 A：直接跑 jar（工作目录放 backend，便于读取 config/application-local.yml）
+cd backend
+java -Xms256m -Xmx512m -jar target/codeinterview-backend-1.0.0.jar
+
+# 方式 B：Docker（前端仍由 Nginx 托管）
+cd backend
+docker build -t codeinterview-backend:1.0.0 .
+docker run -d --name codeinterview-backend --env-file ../.env -p 8080:8080 codeinterview-backend:1.0.0
+```
+
+生产环境用**环境变量**提供凭据（`.env.example` 为模板，复制为 `.env` 且不入库）：
+`DB_HOST/DB_PORT/DB_USERNAME/DB_PASSWORD`、`ADMIN_INIT_PASSWORD`、`AI_*`、`SPRING_PROFILES_ACTIVE=prod`。
+环境变量优先级最高，会覆盖 jar 内 `application.yml`；服务器上不需要 `application-local.yml`。
+
+> **AI 助手**：不配置 `AI_API_KEY` 时 `ai.enabled` 仍为 `true`，但 `/api/v1/ai/chat` 返回 50201（其余功能正常）。
+> 本机演示可用 `--spring.profiles.active=mock`（内置 mock 上游，不需要真实 Key）。
+
+### 7.5 部署后验证
+
+```powershell
+curl.exe http://127.0.0.1/api/v1/health                 # {"status":"UP","db":"UP",...}
+# 浏览器打开 http://127.0.0.1/ → 首页应看到 ≥15 道题（演示数据），点带代码的题有高亮
+# 登录 admin / 123456（演示数据密码）→ 管理端入口可用；刷题记录页有指标卡与两张图
+# SSE 经 Nginx 必须逐字输出（不是一次性）：
+curl.exe -N -X POST http://127.0.0.1/api/v1/ai/chat -H "satoken: <token>" `
+  -H "Content-Type: application/json" -H "Accept: text/event-stream" `
+  -d "{\"messages\":[{\"role\":\"user\",\"content\":\"HashMap 扩容\"}]}"
+```
+
+### 7.6 备份与恢复
+
+```bash
+bash scripts/backup.sh          # 生成 backups/codeinterview_<yyyyMMdd_HHmmss>.sql.gz，保留 14 天
+gunzip -c backups/codeinterview_20261105_030000.sql.gz | mysql -uroot -p codeinterview   # 恢复
+```
+
+计划任务示例（每天 03:00）：`0 3 * * * cd /path/to/CodeInterview && bash scripts/backup.sh >> logs/backup.log 2>&1`。
+
+> 注意：Sa-Token 是**内存会话**，重启后端后所有 token 失效，需要重新登录（已在验收 AC-15 声明）。
+
+## 8. 常见问题
 
 | 现象 | 原因 / 处理 |
 |---|---|
@@ -139,7 +230,7 @@ cd frontend
 | 想用容器 MySQL | `cd docker && docker compose up -d mysql`，容器映射 3307；应用侧设 `DB_PORT=3307`，默认不要启用 |
 | 前端刷新非首页路由 404（部署） | Nginx 必须配 `try_files $uri $uri/ /index.html`，见 `nginx/default.conf` |
 
-## 8. 安全与配置约定（交付前检查）
+## 9. 安全与配置约定（交付前检查）
 
 - `backend/config/application-local.yml`、`db/grant.sql`、`.env` 均被 `.gitignore` 忽略，**不得提交**；
   模板文件 `application-local.yml.example` 的密钥字段必须为空。
