@@ -51,6 +51,17 @@
         </el-tag>
       </div>
 
+      <div class="question-detail__actions">
+        <el-button
+          class="question-detail__action"
+          :type="favorited ? 'primary' : 'default'"
+          :loading="favoriteLoading"
+          @click="toggleFavorite"
+        >
+          {{ favorited ? '★ 已收藏' : '☆ 收藏' }}
+        </el-button>
+      </div>
+
       <section class="question-detail__card">
         <h2 class="question-detail__card-title">题干</h2>
         <MarkdownView :content="question.contentMd" empty-text="暂无题干" />
@@ -99,7 +110,15 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getQuestionDetail } from '@/api/question'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
+import {
+  favoriteQuestion,
+  getQuestionDetail,
+  unfavoriteQuestion
+} from '@/api/question'
+import { useUserStore } from '@/stores/user'
 import MarkdownView from '@/components/MarkdownView.vue'
 import DifficultyTag from '@/components/DifficultyTag.vue'
 import ErrorState from '@/components/ErrorState.vue'
@@ -107,12 +126,16 @@ import NotFound from '@/views/NotFound.vue'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref(true)
 const loadError = ref('')
 const notFound = ref(false)
 const detail = ref(null)
 const answerExpanded = ref(false)
+// 收藏按钮：乐观更新，失败回滚（04 B4.3 / B5.2）
+const favorited = ref(false)
+const favoriteLoading = ref(false)
 
 const question = computed(() => (detail.value ? detail.value.question : null))
 const neighbors = computed(() =>
@@ -135,6 +158,7 @@ async function loadDetail() {
     const data = await getQuestionDetail(route.params.id)
     if (seq !== loadSeq) return
     detail.value = data
+    favorited.value = Boolean(data.myFavorite)
     window.scrollTo({ top: 0, behavior: 'auto' })
   } catch (error) {
     if (seq !== loadSeq) return
@@ -161,6 +185,40 @@ watch(
 function goQuestion(id) {
   if (!id) return
   router.push({ name: 'question-detail', params: { id } })
+}
+
+/** 游客点收藏先弹登录（04 B4.3），已登录走乐观更新 */
+async function toggleFavorite() {
+  if (favoriteLoading.value) return
+  if (!userStore.isLogin) {
+    try {
+      await ElMessageBox.confirm('登录后才能收藏，去登录？', '需要登录', {
+        type: 'info',
+        confirmButtonText: '去登录',
+        cancelButtonText: '取消'
+      })
+    } catch {
+      return
+    }
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  const next = !favorited.value
+  favorited.value = next
+  favoriteLoading.value = true
+  try {
+    if (next) {
+      await favoriteQuestion(question.value.id)
+    } else {
+      await unfavoriteQuestion(question.value.id)
+    }
+    ElMessage.success(next ? '已收藏' : '已取消收藏')
+  } catch (error) {
+    favorited.value = !next
+    ElMessage.error((error && error.message) || '操作失败，请重试')
+  } finally {
+    favoriteLoading.value = false
+  }
 }
 </script>
 
@@ -201,6 +259,19 @@ function goQuestion(id) {
 
 .question-detail__tag {
   border-radius: var(--radius-tag);
+}
+
+.question-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.question-detail__action {
+  min-height: 44px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-button);
 }
 
 .question-detail__card {

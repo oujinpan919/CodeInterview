@@ -53,7 +53,7 @@ const routes = [
   {
     path: '/favorites',
     name: 'favorites',
-    component: pendingView('Favorites', '我的收藏'),
+    component: () => import('@/views/Favorites.vue'),
     meta: { title: '我的收藏', requiresAuth: true, requiresAdmin: false }
   },
   {

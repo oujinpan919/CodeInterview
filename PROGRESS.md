@@ -208,6 +208,29 @@
 - **PROGRESS.md**：已更新到 T07（本文件）。
 - **恢复起点（会话 B）**：T08 收藏；数据从 seed 3 草稿题 + admin 开始，按 07「会话 B」提示词执行 T08–T13。
 
+---
+
+## 【会话 B】任务卡记录（T08–T13）
+
+### T08 · 收藏 ✅
+
+**改动文件**
+- 后端（新增）：`favorite/{FavoriteController,FavoriteService,FavoriteMapper}.java`、`favorite/vo/{FavoriteStateResp,FavoriteQuestionResp}.java`
+- 前端：`src/views/Favorites.vue`（新增）、`src/views/QuestionDetail.vue`（收藏按钮 + 乐观更新）、`src/api/question.js`、`src/router/index.js`（`/favorites` 换真实组件）
+
+**验收（真实输出，2026-11-05）**
+- `POST /questions/1/favorite` ×3 → 三次均 `{"favorited":true}`；`SELECT COUNT(*) FROM user_favorite` = 1（q1），列表 total=3（q1/q2/q3）无重复行
+- 列表倒序：`ids=3,2,1`（按 `favorited_at DESC`）；首项字段 `id,title,difficulty,categoryId,categoryName,tags,viewCount,practiceCount,status,publishedAt,favoritedAt` 齐全
+- `DELETE /questions/1/favorite` → `{"favorited":false}`；再收藏成功，列表 total 仍 3（无逻辑删除残留）
+- 无 token → HTTP 401 `40100`；`/questions/999/favorite` → HTTP 404 `40400`；`?page=99` → HTTP 200 `list:[]`；`?pageSize=500` → `size=50`
+- 下架口径：临时 `status=2` → 收藏列表仍返回该题且 `status=2`，详情 `/questions/1` → HTTP 404 `40400`，再次收藏 → 404；恢复 `status=1` 后列表 `status=1`
+- 浏览器（headless Edge/CDP，真实接口）：游客 `/favorites` → `/login?redirect=/favorites`；登录回跳；标题「我的收藏」、计数「共 3 道」、3 卡；取消收藏 → 2 卡且计数减 1；详情「☆ 收藏」→ 点击「★ 已收藏」→ 刷新仍「★ 已收藏」→ 再点回「☆ 收藏」；收藏页剩 2 条
+- 375×667：收藏页 `scrollWidth=375, clientWidth=375`、取消收藏按钮高 44px 可点；详情页无横向滚动、收藏按钮高 44px；游客点收藏弹「登录后才能收藏，去登录？」
+- `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0（Favorites chunk gzip 1.66 kB）
+
+**偏离登记**：见 `开发文档/02 §10`（T08 改动文件未列 `QuestionDetail.vue` 与辅助 VO，但「详情页收藏按钮」与 Result 出参类型属本卡职责）。
+
+
 
 
 
