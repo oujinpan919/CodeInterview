@@ -331,8 +331,14 @@ async function handleLogout() {
   }
 
   .app-header__avatar {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .app-header__brand {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
   }
 }
 </style>
