@@ -1,13 +1,16 @@
 package com.codeinterview.practice;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import com.codeinterview.practice.vo.WrongBookItemResp;
 import com.codeinterview.practice.vo.WrongBookState;
 
 /**
@@ -60,4 +63,45 @@ public interface WrongRecordMapper {
     @Select("SELECT resolved, wrong_count FROM wrong_record "
             + "WHERE user_id = #{userId} AND question_id = #{questionId} LIMIT 1")
     WrongBookState selectState(@Param("userId") Long userId, @Param("questionId") Long questionId);
+
+    /** 错题本列表总数（03 §8.4：deleted=1 的题不出现，status=2 的题照常出现）。 */
+    @Select("SELECT COUNT(*) FROM wrong_record w JOIN question q ON q.id = w.question_id "
+            + "WHERE w.user_id = #{userId} AND w.resolved = #{resolved} AND q.deleted = 0")
+    long countByResolved(@Param("userId") Long userId, @Param("resolved") int resolved);
+
+    @Select("""
+            SELECT w.question_id, w.last_assess, w.wrong_count, w.last_wrong_at, w.resolved,
+                   q.title, q.difficulty, q.status, c.name AS category_name
+            FROM wrong_record w
+            JOIN question q ON q.id = w.question_id
+            JOIN category c ON c.id = q.category_id
+            WHERE w.user_id = #{userId} AND w.resolved = #{resolved} AND q.deleted = 0
+            ORDER BY w.last_wrong_at DESC, w.id DESC
+            LIMIT #{offset}, #{size}
+            """)
+    List<WrongBookItemResp> selectPageByResolved(@Param("userId") Long userId,
+                                                 @Param("resolved") int resolved,
+                                                 @Param("offset") long offset,
+                                                 @Param("size") int size);
+
+    /**
+     * T10 手动「标记掌握」（03 §4.2）：三列必须一起写，且不改 wrong_count。
+     * 影响行数 0 表示无该用户的行（从未进过错题本，或属于别的用户，由 Service 区分 40400/40300）。
+     */
+    @Update("""
+            UPDATE wrong_record
+            SET last_assess = 1, resolved = 1, mastered_at = #{now}, updated_at = #{now}
+            WHERE user_id = #{userId} AND question_id = #{questionId}
+            """)
+    int markResolved(@Param("userId") Long userId,
+                     @Param("questionId") Long questionId,
+                     @Param("now") LocalDateTime now);
+
+    /** 该题是否存在任意用户的错题行：用于区分「无记录 40400」与「越权 40300」。 */
+    @Select("SELECT COUNT(*) FROM wrong_record WHERE question_id = #{questionId}")
+    long countAnyByQuestion(@Param("questionId") Long questionId);
+
+    /** 手动「彻底移除」：物理删除该行（03 §1）；不存在也视为成功（04 A3.4 #18）。 */
+    @Delete("DELETE FROM wrong_record WHERE user_id = #{userId} AND question_id = #{questionId}")
+    int delete(@Param("userId") Long userId, @Param("questionId") Long questionId);
 }

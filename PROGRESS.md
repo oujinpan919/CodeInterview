@@ -254,6 +254,28 @@
 
 **偏离登记**：见 `开发文档/02 §10`（新增 `/practice-records` 控制器与辅助类、T09 提前建 `WrongRecordMapper`、详情页今日数初始无接口来源）。
 
+### T10 · 错题本 ✅
+
+**改动文件**
+- 后端（新增）：`practice/{WrongBookController,WrongBookService}.java`、`practice/vo/{WrongBookItemResp,WrongResolvedResp}.java`
+- 后端（扩展）：`practice/WrongRecordMapper.java`（列表/计数/标记掌握/彻底移除/跨用户判定）
+- 前端：`src/views/WrongBook.vue`（新增）、`src/api/record.js`、`src/router/index.js`（`/wrong-book` 换真实组件）
+
+**验收（真实输出，2026-11-05，真实 DB + curl + headless Edge/CDP）**
+- 列表：`GET /wrong-book?resolved=0` → `total=1`，字段齐全且同名同义 `questionId,title,difficulty,categoryName,lastAssess,wrongCount,lastWrongAt,resolved,status`；`status=1`
+- 标记掌握：`PUT /wrong-book/1/resolved` → `{"resolved":1}`；DB `resolved=1, last_assess=1, mastered_at 非空, wrong_count 保持 10`（三列同写、错次不变）；未掌握 total=0、已掌握 total=1；再次 PUT 幂等返回 `{"resolved":1}`
+- 已掌握后再自评「模糊」→ 响应 `resolved=0`，DB `resolved=0, mastered_at=NULL, last_assess=2, wrong_count 10→11`（回到未掌握，`01 §8.3` 第 4 条转移）
+- 彻底移除：`DELETE /wrong-book/1` → 200，DB 行数 0；再删一次仍 200；无记录 PUT → 404 `40400`；`DELETE /wrong-book/999` → 200
+- 跨用户：注册 `t10user`（id=5）对 q2 自评「模糊」产生其错题行；admin `PUT /wrong-book/2/resolved` → HTTP 403 `40300`（不区分不存在/不属于你）；admin `DELETE /wrong-book/2` → 200 且 t10user 行仍在（04 A3.4 #18 不存在也成功，不泄漏归属）
+- 已下架/已删除：`q3` 置 `status=2` → 列表仍返回且 `status=2`；`q3` 置 `deleted=1` → 列表不返回，但 `wrong_record` 行仍保留；均按 03 §8.4 口径
+- 分页：`pageSize=500` → 实际 `size=50`；`page=99` → `list:[]`
+- 浏览器：未掌握 tab 表格行含「去复习/标记掌握/彻底移除」；标记掌握后该行消失；已掌握 tab 的**自评列显示「掌握」**（而非模糊，F05 验收点）；彻底移除弹「移除后该题的历史错题记录将不可恢复」→ 确认后空态「还没有已掌握的错题」；「去复习」跳 `/question/2?from=wrong` 且随后自评记录 `source=3`；375×667 卡片化、无横向滚动 `375/375`、操作按钮高 44px
+- 已下架 UI：`q2` 临时 `status=2` 时桌面「去复习」按钮 disabled、移动端卡片显示「题目已下架，仅供查看」且按钮 disabled；恢复 `status=1`
+- `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0
+
+**偏离登记**：见 `开发文档/02 §10`（辅助 VO 清单、跨用户 DELETE 口径按 04 #18、markResolved 用影响行数 + 存在性判定区分 40400/40300）。
+
+
 
 
 

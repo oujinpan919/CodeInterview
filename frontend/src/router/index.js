@@ -59,7 +59,7 @@ const routes = [
   {
     path: '/wrong-book',
     name: 'wrong-book',
-    component: pendingView('WrongBook', '错题本'),
+    component: () => import('@/views/WrongBook.vue'),
     meta: { title: '错题本', requiresAuth: true, requiresAdmin: false }
   },
   {
