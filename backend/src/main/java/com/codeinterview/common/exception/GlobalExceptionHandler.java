@@ -8,6 +8,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -15,10 +16,13 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.io.IOException;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -82,6 +86,23 @@ public class GlobalExceptionHandler {
         return build(ResultCode.ADMIN_REQUIRED, null);
     }
 
+    /**
+     * SSE 异步请求超时（SseEmitter 190s 兜底；正常应由 watchdog 180s 先发 error）。
+     * 响应可能已提交，返回 50202 或空响应都不影响客户端已收内容。
+     */
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public ResponseEntity<Result<Void>> handleAsyncTimeout(AsyncRequestTimeoutException ex) {
+        log.warn("[{}] async request timeout", currentTraceId());
+        return build(ResultCode.AI_TIMEOUT, null);
+    }
+
+    /** 客户端断开后容器再次写响应（05 §9.2「客户端断开/点停止」）：记录即可，不当作业务错误。 */
+    @ExceptionHandler({AsyncRequestNotUsableException.class, IOException.class})
+    public ResponseEntity<Void> handleClientAborted(Exception ex) {
+        log.debug("[{}] response write aborted by client: {}", currentTraceId(), ex.getMessage());
+        return ResponseEntity.ok().build();
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleException(Exception ex) {
         log.error("[{}] unhandled exception", currentTraceId(), ex);
@@ -89,7 +110,11 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<Result<Void>> build(ResultCode resultCode, String message) {
-        return ResponseEntity.status(resultCode.getHttpStatus()).body(Result.error(resultCode, message));
+        // 显式 application/json：/ai/chat 的前端请求带 Accept: text/event-stream，
+        // 不指定会产生内容协商失败（406），流前错误必须仍是 Result JSON（05 §4.3）。
+        return ResponseEntity.status(resultCode.getHttpStatus())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Result.error(resultCode, message));
     }
 
     private String describeFieldError(FieldError fieldError) {

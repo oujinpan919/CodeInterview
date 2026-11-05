@@ -14,10 +14,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import com.codeinterview.ai.AiProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -75,6 +77,7 @@ public class MockUpstreamServer implements SmartLifecycle {
 
     private final ObjectMapper objectMapper;
     private final int port;
+    private final AiProperties aiProperties;
 
     private final Map<String, AtomicInteger> modelHits = new ConcurrentHashMap<>();
     private final AtomicInteger totalRequests = new AtomicInteger();
@@ -84,14 +87,21 @@ public class MockUpstreamServer implements SmartLifecycle {
     private volatile HttpServer server;
     private volatile ExecutorService executor;
 
+    /** Spring 使用：端口可由 ai.mock.port 覆盖；0 表示随机端口（集成测试用）。 */
     @Autowired
-    public MockUpstreamServer(ObjectMapper objectMapper) {
-        this(objectMapper, DEFAULT_PORT);
+    public MockUpstreamServer(ObjectMapper objectMapper, AiProperties aiProperties,
+                              @Value("${ai.mock.port:18080}") int port) {
+        this(objectMapper, port, aiProperties);
     }
 
     public MockUpstreamServer(ObjectMapper objectMapper, int port) {
+        this(objectMapper, port, null);
+    }
+
+    private MockUpstreamServer(ObjectMapper objectMapper, int port, AiProperties aiProperties) {
         this.objectMapper = objectMapper;
         this.port = port;
+        this.aiProperties = aiProperties;
     }
 
     @Override
@@ -110,7 +120,12 @@ public class MockUpstreamServer implements SmartLifecycle {
             httpServer.setExecutor(executor);
             httpServer.start();
             server = httpServer;
-            log.info("[mock] upstream started: http://127.0.0.1:{}{}", port, PATH);
+            int boundPort = httpServer.getAddress().getPort();
+            // 随机端口（集成测试）时把 ai.base-url 指向真实端口，避免两个 Spring 上下文抢 18080
+            if (port == 0 && aiProperties != null) {
+                aiProperties.setBaseUrl("http://127.0.0.1:" + boundPort);
+            }
+            log.info("[mock] upstream started: http://127.0.0.1:{}{}", boundPort, PATH);
         } catch (IOException ex) {
             throw new IllegalStateException("mock upstream start failed on port " + port, ex);
         }

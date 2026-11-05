@@ -420,6 +420,36 @@
 
 **偏离登记**：见 `开发文档/02 §10`（`@SpringBootTest(profiles=)` 不存在改 `@ActiveProfiles`；mock 增加 `mock-code`/`mock-security` 两个验收剧本；T14 提前建 `chat/dto/Msg`；`application.yml` 补 `ai.*` 默认键；重试落在 `LlmStreamClient.open()`）
 
+### T15 · 配额/限流 + `/ai/chat` SSE ✅
+
+**改动文件**
+- 后端（新增）：`chat/{ChatController,ChatService,ChatValidator,QuotaService,QuotaMapper,RateGate,AiStreamRegistry,AiChatLogService,AiChatLogMapper}.java`、`chat/dto/ChatReq.java`、`chat/vo/AiQuotaResp.java`、`chat/entity/AiChatLog.java`、`ai/{AiExecutorConfig,UpstreamCodeMapper}.java`
+- 后端（修改）：`common/exception/GlobalExceptionHandler.java`（异步异常 + 流前 JSON 内容协商）、`mock/MockUpstreamServer.java`（`ai.mock.port` 随机端口支持，供集成测试）
+- 单测（新增）：`test/.../chat/{ChatGateTest,ChatQuotaTest,ChatStreamTest}.java`、`test/.../support/ChatTestSupport.java`
+
+**验收（真实输出，2026-11-05）**
+- `mvn -q test -Dtest=ChatGateTest,ChatQuotaTest,ChatStreamTest` → exit 0；`ChatGateTest Tests run: 8, Failures: 0` + `ChatQuotaTest Tests run: 2, Failures: 0` + `ChatStreamTest Tests run: 5, Failures: 0`（15 个真实用例，覆盖 05 §12 #1–#13、#15）
+  - #1 未登录 → HTTP 401 + 40100、无 `text/event-stream`
+  - #2 `mock-ok`：`event:meta×1 → event:delta×20 → event:done×1`；`done.usage.totalTokens=32`；`done.quota.used=1/limit=30`；DB `used_count=1`、`site_ai_usage.used_tokens=32`；请求体含 `"thinking":{"type":"disabled"}` 且无 `stream_options`
+  - #3 账号额度 30/30 → 429 + 42901，`GET /ai/quota` 同步 `used=30 remaining=0 resetAt=2026-11-06 00:00:00`
+  - #4 4 条在途时第 5 条 → 429 + 42902，且第 5 条 `used_count=0`（闸门在预扣之前）
+  - #5 `mock-slow` → 20s 后 `event:error{50202}`、`user_ai_quota.used_count=0`（回滚）、status=2；等 3s 后换 `mock-ok` 可继续成功
+  - #6 `mock-break` → 收 3 段 delta 后 `event:error{50202}`、无 done、计 1 条、`ai_chat_log.estimated=1`
+  - #7 客户端读到首个 delta 后断开 → 服务端 `ai_chat_log.status=3`、已收文本保留、额度不返还；Semaphore 释放，3s 后可再次成流
+  - #8 11 条 / 7700 字符上下文 → **不报 40000**，静默裁剪为 ≤10 条且 ≤6000 字符，末条用户消息保留
+  - #9 注入 `role=system` → 上游请求体只有服务端 system + user，注入内容被丢弃
+  - #10 `questionId=1`（草稿）→ 流前 404 + 40400，未调用上游（`totalRequests=0`）
+  - #11 同账号并发 → 第 2 条 42901；#12 3s 内第 2 条 → 42901 且额度不变；#13 `mock-nousage` → `done.usage.estimated=1` 不中断；#15 线程池拒绝 → 42902 + 两项额度回滚（Mockito 构造）
+- 真实服务手动验证（mock profile，`curl -N` 走 8080）：登录 admin → `POST /api/v1/ai/chat` → `http=200 first_byte=0.029499s total=2.702091s`，事件计数 `meta 1 / delta 20 / done 1`，末行 `data:{"messageId":"9a514375","usage":{"promptTokens":12,...,"totalTokens":32,"estimated":0},"quota":{"limit":30,"used":1}}`
+- 连续两次请求（第一次 2.49s 结束、立即发第二次，距第一次启动 <3s）→ `{"code":42901,...}` + HTTP 429，`used_count` 保持 4
+- 客户端 `--max-time 0.8` 中途断开 → `ai_chat_log` 新增 `status=3, estimated=1, latency_ms=865`，`used_count` 从 3 变 4（已出字计 1 条不回滚）
+- `GET /api/v1/ai/quota` → `{"dailyLimit":30,"used":3,"remaining":27,"siteRemaining":297,"resetAt":"2026-11-06 00:00:00"}`
+- 验证后清理：`user_ai_quota` / `site_ai_usage` / `ai_chat_log` 清空、测试临时用户删除（仅剩 admin）
+
+**说明**：测试用 `@SpringBootTest(webEnvironment=RANDOM_PORT)` + JDK HttpClient 读真实字节流（MockMvc 对 SseEmitter 的 `asyncDispatch` 会永久等待，已登记 02 §10）；mock 上游在本用例上下文用随机端口并回写 `ai.base-url`，不与 T14 的 18080 冲突。
+
+**偏离登记**：见 `开发文档/02 §10`（SSE 单测方式、mock 随机端口、新增 Mapper/实体/出参/映射类、流前 JSON 内容协商、客户端断开异常、sessionId 入参、complete 时机、闸门间隔推进、已出字失败按估算计 tokens）
+
 
 
 
