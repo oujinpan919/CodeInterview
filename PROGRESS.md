@@ -310,6 +310,29 @@
 
 **数据说明**：为 B1 验证，3 道 seed 题临时置为发布态（临时 `published_at`），B2 结束后还原为 seed 草稿态。
 
+### T12 · 管理端题目 CRUD + 发布/下架 ✅
+
+**改动文件**
+- 后端（新增）：`admin/questions/{AdminQuestionController,AdminQuestionService,AdminQuestionMapper}.java`、`admin/dto/QuestionSaveReq.java`、`admin/vo/{AdminQuestionListItemResp,AdminQuestionDetailResp,QuestionIdResp,QuestionStatusResp}.java`、`question/entity/Question.java`
+- 后端（修改）：`common/config/SaTokenConfig.java`（注册 `SaInterceptor` 启用方法级 `@SaCheckRole`）
+- 前端（新增）：`src/views/admin/{AdminQuestions,AdminQuestionEdit}.vue`、`src/components/admin/QuestionForm.vue`、`src/api/admin.js`
+- 前端（修改）：`src/router/index.js`（两条管理端路由换真实组件）
+
+**验收（真实输出，2026-11-05，真实 DB + curl + headless Edge/CDP）**
+- 列表/筛选：`GET /admin/questions` → `total=3`、字段齐全 `id,title,categoryId,categoryName,difficulty,status,source,publishedAt,updatedAt`；`status=0`→0、`status=1`→3、`keyword=HashMap`→1、`pageSize=500`→`size=50`
+- 新建：`POST` → `{"id":"4"}`，DB `status=0`、`published_at` NULL、标签 2 行；草稿前台列表不出现、详情 404
+- 详情/标签覆盖：`GET /admin/questions/4` → `tagIds=[1,3]`；改成 1 个 → `question_tag` 恰 1 行；再改 3 个 → 恰 3 行
+- 发布：`PUT publish` → `{"status":1}`、`published_at` 非空；重复发布不改 `published_at`；前台列表/详情立即可见；**已发布题编辑保存后前台标题立即更新**
+- 下架：`PUT offline` → `{"status":2}`、前台详情 404、列表不出现；重新发布后 `published_at` 仍为首次值、前台恢复可见
+- 逻辑删除：`DELETE` → DB `deleted=1`、管理端列表不出现、前台 404
+- 校验：缺标题 / 难度=5 / 分类 999 / 标签 11 个 / 标签 999 均 HTTP 400 `40000` 且文案定位字段；空答案发布 → HTTP 400 `40000`「参考答案不能为空」；`GET/DELETE /admin/questions/999` → 404
+- 权限：普通用户 `GET/POST /admin/**` → HTTP 403 `40301`；无 token → 401 `40100`；管理员菜单可见；非管理员访问 `/admin/questions` 路由守卫跳 `/403`
+- 浏览器：管理端入口 → 列表 3 行状态标签；新建页空表单 4 条校验错误；填标题/题干/答案/分类 Java/难度中等/标签 JVM；未保存点返回弹「当前修改尚未保存」并可继续编辑；保存草稿 → 列表出现「草稿」；发布 → 状态变「发布」→ 前台详情可见；编辑标题保存 → 前台立即生效；下架 → 前台 404；删除 → 列表消失；375×667 列表转卡片、编辑页无横向滚动
+- `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0
+
+**偏离登记**：见 `开发文档/02 §10`（写侧 Question 实体与辅助 VO、SaTokenConfig 启用注解鉴权、T12 暂用公开分类接口待 T13 切换、QuestionForm 增加 cancel emit）。
+
+
 
 
 

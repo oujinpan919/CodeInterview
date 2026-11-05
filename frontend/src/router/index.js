@@ -82,13 +82,13 @@ const routes = [
   {
     path: '/admin/questions',
     name: 'admin-questions',
-    component: pendingView('AdminQuestions', '题目管理'),
+    component: () => import('@/views/admin/AdminQuestions.vue'),
     meta: { title: '题目管理', requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/admin/questions/edit',
     name: 'admin-question-edit',
-    component: pendingView('AdminQuestionEdit', '题目编辑'),
+    component: () => import('@/views/admin/AdminQuestionEdit.vue'),
     meta: { title: '题目编辑', requiresAuth: true, requiresAdmin: true }
   },
   {
