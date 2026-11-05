@@ -60,7 +60,7 @@ public class AuthService {
         if (userService.findByNickname(nickname) != null) {
             throw new BusinessException(ResultCode.CONFLICT, "该昵称不可用，请换一个");
         }
-        User user = userService.create(nickname, req.getPassword(), 0);
+        User user = userService.create(nickname, req.getPassword(), User.ROLE_NORMAL);
         log.info("register ok nickname={} userId={}", nickname, user.getId());
         return new RegisterResp(user.getId());
     }
@@ -81,12 +81,12 @@ public class AuthService {
         } else {
             matched = BCrypt.checkpw(req.getPassword(), user.getPassword());
         }
-        if (user == null || !matched || (user.getDeleted() != null && user.getDeleted() == 1)) {
+        if (user == null || !matched || (user.getDeleted() != null && user.getDeleted() == User.DELETED)) {
             loginAttemptGuard.recordFailure(ip, nickname);
             log.warn("login failed nickname={} ip={}", nickname, ip);
             throw new BusinessException(ResultCode.LOGIN_FAILED, "昵称或密码错误");
         }
-        if (user.getStatus() != null && user.getStatus() == 0) {
+        if (user.getStatus() != null && user.getStatus() == User.STATUS_DISABLED) {
             throw new BusinessException(ResultCode.ACCOUNT_DISABLED, "账号已被禁用，请联系管理员");
         }
         loginAttemptGuard.clear(ip, nickname);
@@ -148,7 +148,7 @@ public class AuthService {
     private User currentUserOrThrow() {
         Long userId = StpUtil.getLoginIdAsLong();
         User user = userService.findById(userId);
-        if (user == null || (user.getDeleted() != null && user.getDeleted() == 1)) {
+        if (user == null || (user.getDeleted() != null && user.getDeleted() == User.DELETED)) {
             StpUtil.logout();
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }

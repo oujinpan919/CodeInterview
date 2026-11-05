@@ -364,7 +364,7 @@ async function handleLogout() {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  box-shadow: 0 4px 16px rgba(31, 41, 55, 0.04);
+  box-shadow: 0 4px 16px rgba(var(--color-text-rgb), 0.04);
 }
 
 .profile-card {

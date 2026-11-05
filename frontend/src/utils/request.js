@@ -72,6 +72,11 @@ function isAdminRequest(config) {
   return url.includes('/admin/')
 }
 
+function isRegisterRequest(config) {
+  const url = config && config.url ? config.url : ''
+  return url.includes('/auth/register')
+}
+
 function handleBusinessError(payload, config) {
   const code = payload && payload.code
   const message = (payload && payload.message) || fallbackMessage(code)
@@ -82,6 +87,10 @@ function handleBusinessError(payload, config) {
     resetLoginState()
     if (navHandlers.onUnauthorized) navHandlers.onUnauthorized()
   } else if (code === 40300) {
+    // 注册关闭（04 B4.5）：注册页卡片内原地提示并隐藏表单，不弹 toast、不跳 /403
+    if (isRegisterRequest(config)) {
+      return error
+    }
     error.__notified = true
     notifyError(message)
     if (navHandlers.onForbidden) navHandlers.onForbidden()

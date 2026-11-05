@@ -35,8 +35,8 @@ public class UserService {
         user.setNickname(nickname);
         user.setPassword(BCrypt.hashpw(rawPassword, BCrypt.gensalt(BCRYPT_COST)));
         user.setRole(role);
-        user.setStatus(1);
-        user.setDeleted(0);
+        user.setStatus(User.STATUS_NORMAL);
+        user.setDeleted(User.NOT_DELETED);
         userMapper.insert(user);
         return user;
     }

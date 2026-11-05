@@ -60,9 +60,9 @@ public class AdminInitializer implements ApplicationRunner {
             User admin = new User();
             admin.setNickname(ADMIN_NICKNAME);
             admin.setPassword(BCrypt.hashpw(initPassword, BCrypt.gensalt(12)));
-            admin.setRole(1);
-            admin.setStatus(1);
-            admin.setDeleted(0);
+            admin.setRole(User.ROLE_ADMIN);
+            admin.setStatus(User.STATUS_NORMAL);
+            admin.setDeleted(User.NOT_DELETED);
             userMapper.insert(admin);
             log.info("admin account created, nickname={}, id={}", ADMIN_NICKNAME, admin.getId());
         } catch (Exception ex) {

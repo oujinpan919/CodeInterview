@@ -233,7 +233,7 @@ async function handleSubmit() {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  box-shadow: 0 12px 32px rgba(31, 41, 55, 0.08);
+  box-shadow: 0 12px 32px rgba(var(--color-text-rgb), 0.08);
 }
 
 .auth-card__title {
@@ -256,7 +256,7 @@ async function handleSubmit() {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
   text-align: center;
-  background-color: rgba(220, 38, 38, 0.06);
+  background-color: rgba(var(--color-danger-rgb), 0.06);
   border-radius: var(--radius-button);
 }
 

@@ -83,7 +83,7 @@ function handleClick() {
 
 .question-card--clickable:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.08);
+  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.08);
 }
 
 .question-card--clickable:focus-visible {

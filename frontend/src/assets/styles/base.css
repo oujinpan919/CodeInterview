@@ -25,6 +25,12 @@
   --color-bg-card: #ffffff;
   --color-border: #e5e7eb;
 
+  /* 供 rgba(var(--*-rgb), alpha) 派生的软背景与阴影；组件内不得再写死 rgba 色值 */
+  --color-primary-rgb: 37, 99, 235;
+  --color-success-rgb: 22, 163, 74;
+  --color-danger-rgb: 220, 38, 38;
+  --color-text-rgb: 31, 41, 55;
+
   /* 圆角 */
   --radius-card: 12px;
   --radius-button: 8px;

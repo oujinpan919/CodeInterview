@@ -46,9 +46,9 @@ public class SaTokenConfig implements WebMvcConfigurer, StpInterface {
             return Collections.emptyList();
         }
         User user = userMapper.selectByIdIncludingDeleted(Long.valueOf(String.valueOf(loginId)));
-        if (user == null || user.getDeleted() == null || user.getDeleted() == 1) {
+        if (user == null || user.getDeleted() == null || user.getDeleted() == User.DELETED) {
             return Collections.emptyList();
         }
-        return Integer.valueOf(1).equals(user.getRole()) ? List.of("ADMIN") : Collections.emptyList();
+        return Integer.valueOf(User.ROLE_ADMIN).equals(user.getRole()) ? List.of("ADMIN") : Collections.emptyList();
     }
 }

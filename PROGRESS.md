@@ -171,6 +171,13 @@
   1. `/home` 分块失败返回 `[]` 而前端按 `null` 判定 ErrorState → 后端改为**失败返回 null、成功无数据返回 []**；实测临时 `RENAME TABLE question` 后 `/home` HTTP 200 且四块为 null（前端可显示分块 ErrorState），恢复后正常。
   2. `/questions?page=99`（total>0 但页越界）时 `attachTags` 生成 `IN ()` 导致 500 → 空列表保护；实测 HTTP 200 + `list:[]`。
   3. 登录失败锁定键未对昵称大小写归一，`Tom/tom` 交替可绕过 → 键改为小写归一；实测 `LockMe/lockme` 交替 5 次后第 6 次 42903。
+- **Standards 轴审查**（T04–T07）剩余项已修复：
+  1. Markdown 兜底 `renderPlainText` 现在也经 `DOMPurify.sanitize`（02 §4.4「始终执行」）。
+  2. `User` 增加 `ROLE_*` / `STATUS_*` / `DELETED` 常量，`UserService`、`AdminInitializer`、`AuthService`、`AuthInterceptor`、`SaTokenConfig` 去除 role/status/deleted 魔法值。
+  3. 注册关闭 40300：`/auth/register` 请求不再被全局护栏跳 `/403`，由注册页原地提示（04 B4.5）。
+  4. 题库筛选单选项触控高度 40→44px（04 B7）；`rgba()` 阴影/软背景改为 `rgba(var(--*-rgb), α)` token（04 B6）。
+  5. 首页「继续刷」窗口函数 SQL 偏离 03 §8.8 已登记 02 §10。
+- 仍未处理（判断项、接受现状）：`attachTags` 在 `QuestionService`/`HomeService` 各有一份（重复但语义不同，重构收益低）；密码校验前端/后端各一份（契约要求两端一致，属预期重复）。
 - 另补登记 02 §10：`user/UserController` 未建（无 `/users` 接口）、昵称查重含已删除行（按 03 §4.4 昵称永不复用）、个人中心「注册时间」无接口来源、首页分块失败语义。
 - Standards 轴审查（依赖/命名/安全/前端红线）在 A1 已跑并修复提交自洽性问题；A2/A3 的 Standards 复跑建议在会话 B 开工前补一次（本会话末未阻塞交付）。
 

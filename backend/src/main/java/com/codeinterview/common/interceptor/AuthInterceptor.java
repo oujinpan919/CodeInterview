@@ -57,11 +57,11 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         Long userId = StpUtil.getLoginIdAsLong();
         User user = userMapper.selectByIdIncludingDeleted(userId);
-        if (user == null || (user.getDeleted() != null && user.getDeleted() == 1)) {
+        if (user == null || (user.getDeleted() != null && user.getDeleted() == User.DELETED)) {
             StpUtil.logout();
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
-        if (user.getStatus() != null && user.getStatus() == 0) {
+        if (user.getStatus() != null && user.getStatus() == User.STATUS_DISABLED) {
             StpUtil.logout();
             throw new BusinessException(ResultCode.ACCOUNT_DISABLED, "账号已被禁用，请联系管理员");
         }

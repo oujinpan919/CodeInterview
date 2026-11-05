@@ -16,6 +16,14 @@ import lombok.Data;
 @TableName("user")
 public class User {
 
+    /* 02 §7 禁止魔法值：角色 / 状态 / 逻辑删除统一用常量（与 03 DDL 注释一致） */
+    public static final int ROLE_NORMAL = 0;
+    public static final int ROLE_ADMIN = 1;
+    public static final int STATUS_DISABLED = 0;
+    public static final int STATUS_NORMAL = 1;
+    public static final int NOT_DELETED = 0;
+    public static final int DELETED = 1;
+
     @TableId(type = IdType.AUTO)
     private Long id;
 

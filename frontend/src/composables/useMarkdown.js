@@ -143,8 +143,8 @@ export async function renderMarkdown(markdown) {
   }
 }
 
-/** 纯文本兜底（转义后放进 <pre>，可直接 v-html 输出，不含原始 HTML） */
+/** 纯文本兜底（转义后放进 <pre>，再经 DOMPurify 清洗；任何路径都不得跳过 sanitize） */
 export function renderPlainText(text) {
   const source = typeof text === 'string' ? text : ''
-  return `<pre class="md-plain-fallback">${escapeHtml(source)}</pre>`
+  return sanitize(`<pre class="md-plain-fallback">${escapeHtml(source)}</pre>`)
 }

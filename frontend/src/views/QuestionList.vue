@@ -512,7 +512,7 @@ onMounted(() => {
 }
 
 .filter-block__group :deep(.el-radio) {
-  min-height: 40px;
+  min-height: 44px;
   margin-right: 0;
   color: var(--color-text);
 }
