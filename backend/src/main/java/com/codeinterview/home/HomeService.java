@@ -58,7 +58,7 @@ public class HomeService {
             return result;
         } catch (Exception ex) {
             log.error("home categories query failed", ex);
-            return List.of();
+            return null;
         }
     }
 
@@ -69,7 +69,7 @@ public class HomeService {
             return latest;
         } catch (Exception ex) {
             log.error("home latest query failed", ex);
-            return List.of();
+            return null;
         }
     }
 
@@ -80,12 +80,13 @@ public class HomeService {
             return hot;
         } catch (Exception ex) {
             log.error("home hot query failed", ex);
-            return List.of();
+            return null;
         }
     }
 
     /**
-     * 仅登录返回；游客为 null（04 A3.2）。查询失败按"该字段为空"处理，返回空列表而非 500。
+     * 仅登录返回；游客为 null（04 A3.2）。查询失败也返回 null：
+     * 前端按「字段 null 且已登录」显示该块 ErrorState（04 B4.1），空数组才表示"成功但无数据"。
      */
     private List<HomeResp.HomeContinueLearning> loadContinueLearning() {
         Long userId = currentUserIdOrNull();
@@ -96,7 +97,7 @@ public class HomeService {
             return homeMapper.selectContinueLearning(userId, CONTINUE_LEARNING_LIMIT);
         } catch (Exception ex) {
             log.error("home continueLearning query failed", ex);
-            return List.of();
+            return null;
         }
     }
 

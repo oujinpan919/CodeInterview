@@ -165,6 +165,15 @@
 - `Ctrl+R` 刷新 → 仍为登录态（账号菜单 + 继续刷保持），验证 sessionStorage + fetchMe
 - 数据为临时发布 3 题 + admin 3 条自评记录，验证后已还原 seed 原状
 
+### 代码审查与修复（A2/A3）
+
+- **Spec 轴审查**（T04–T07）发现 3 个真实缺陷，已修复并用真实请求复验：
+  1. `/home` 分块失败返回 `[]` 而前端按 `null` 判定 ErrorState → 后端改为**失败返回 null、成功无数据返回 []**；实测临时 `RENAME TABLE question` 后 `/home` HTTP 200 且四块为 null（前端可显示分块 ErrorState），恢复后正常。
+  2. `/questions?page=99`（total>0 但页越界）时 `attachTags` 生成 `IN ()` 导致 500 → 空列表保护；实测 HTTP 200 + `list:[]`。
+  3. 登录失败锁定键未对昵称大小写归一，`Tom/tom` 交替可绕过 → 键改为小写归一；实测 `LockMe/lockme` 交替 5 次后第 6 次 42903。
+- 另补登记 02 §10：`user/UserController` 未建（无 `/users` 接口）、昵称查重含已删除行（按 03 §4.4 昵称永不复用）、个人中心「注册时间」无接口来源、首页分块失败语义。
+- Standards 轴审查（依赖/命名/安全/前端红线）在 A1 已跑并修复提交自洽性问题；A2/A3 的 Standards 复跑建议在会话 B 开工前补一次（本会话末未阻塞交付）。
+
 ---
 
 ## 【交接 · 会话 A】

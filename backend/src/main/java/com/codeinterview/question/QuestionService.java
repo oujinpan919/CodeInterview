@@ -148,6 +148,9 @@ public class QuestionService {
      * 标签一次 IN 批量取回后按题目分组，禁止在循环里逐题查库（N+1）。
      */
     private void attachTags(List<QuestionBriefResp> questions) {
+        if (questions == null || questions.isEmpty()) {
+            return;
+        }
         List<Long> questionIds = questions.stream().map(QuestionBriefResp::getId).toList();
         List<QuestionTagRow> rows = questionMapper.selectTagsByQuestionIds(questionIds);
         Map<Long, List<TagBriefResp>> tagsByQuestion = new HashMap<>();

@@ -80,7 +80,9 @@ public class LoginAttemptGuard {
     }
 
     private String key(String ip, String nickname) {
-        return (ip == null ? "" : ip) + "|" + (nickname == null ? "" : nickname);
+        // 昵称唯一键大小写不敏感（uk_nickname），锁定键必须同样归一，否则 Tom/tom 交替可绕过 10 分钟 5 次
+        String normalizedNickname = nickname == null ? "" : nickname.trim().toLowerCase(java.util.Locale.ROOT);
+        return (ip == null ? "" : ip) + "|" + normalizedNickname;
     }
 
     private static final class Attempt {
