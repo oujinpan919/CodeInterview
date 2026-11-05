@@ -2,13 +2,16 @@ import { computed, reactive, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { getQuota } from '@/api/ai'
 import { streamChat } from '@/utils/sse'
+import { FALLBACK_MESSAGES } from '@/utils/request'
 import { useUserStore } from '@/stores/user'
 
 /**
- * 助手会话状态（05 §6.3 状态机）：idle → connecting → streaming → done
- *                      ↘（流前错误）idle + 提示    ↘ error → failed（保留文本）
- *                      streaming → stop() → aborted（保留文本）
+ * 助手会话状态（02 §4.7 store 契约 / 05 §6.3 状态机）：
+ * idle → connecting → streaming → done
+ *                ↘（流前错误）idle + 提示    ↘ error → failed（保留文本）
+ * streaming → stop() → aborted（保留文本）
  *
+ * 契约字段：visible / messages / streaming / questionId / quota / openWithQuestion(id) / send / stop / reset。
  * 会话只存在内存中（刷新即清空）；服务端不持久化消息正文。
  * 额度来自 GET /ai/quota，done.quota 回来后局部更新。
  */
@@ -17,17 +20,6 @@ const MAX_MESSAGES = 10
 const MAX_CHARS = 6000
 const MAX_SINGLE_CHARS = 2000
 const MIN_INTERVAL_MS = 3000
-
-const FALLBACK_MESSAGES = {
-  40000: '请求内容不合规，请调整后重试',
-  40100: '登录已过期，请重新登录',
-  40400: '题目不存在或已下架',
-  42901: '今日额度已用完，请稍后再试',
-  42902: '使用人数较多，请稍后再试',
-  50000: '服务异常，请稍后重试',
-  50201: 'AI 服务暂不可用',
-  50202: 'AI 响应超时，请重试'
-}
 
 let seq = 0
 
@@ -50,10 +42,11 @@ function newSessionId() {
 export const useAssistantStore = defineStore('assistant', () => {
   const userStore = useUserStore()
 
-  const open = ref(false)
+  const visible = ref(false)
   const state = ref('idle')
   const messages = ref([])
-  const question = ref(null)
+  const questionId = ref(null)
+  const questionTitle = ref('')
   const quota = ref(null)
   const notice = ref('')
   const sessionId = ref(newSessionId())
@@ -61,15 +54,20 @@ export const useAssistantStore = defineStore('assistant', () => {
   let controller = null
   let lastSentAt = 0
 
-  const isStreaming = computed(() => state.value === 'connecting' || state.value === 'streaming')
+  const question = computed(() =>
+    questionId.value ? { id: questionId.value, title: questionTitle.value } : null
+  )
+  const streaming = computed(() => state.value === 'connecting' || state.value === 'streaming')
   const quotaExhausted = computed(
     () => Boolean(quota.value) && (quota.value.remaining ?? 1) <= 0
   )
 
-  function resetSession() {
+  function reset() {
+    visible.value = false
     messages.value = []
     state.value = 'idle'
-    question.value = null
+    questionId.value = null
+    questionTitle.value = ''
     quota.value = null
     notice.value = ''
     sessionId.value = newSessionId()
@@ -78,29 +76,31 @@ export const useAssistantStore = defineStore('assistant', () => {
   }
 
   function openPanel() {
-    open.value = true
+    visible.value = true
     if (userStore.isLogin) loadQuota()
   }
 
   function closePanel() {
-    if (isStreaming.value) stop()
-    open.value = false
+    if (streaming.value) stop()
+    visible.value = false
   }
 
   function togglePanel() {
-    if (open.value) closePanel()
+    if (visible.value) closePanel()
     else openPanel()
   }
 
-  /** 详情页「问助手」：带入题目 id + 标题（题干由服务端查库拼进 prompt）。 */
-  function openWithQuestion({ id, title }) {
+  /** 详情页「问助手」：带入题目 id + 标题（题干由服务端按 questionId 查库拼进 prompt）。 */
+  function openWithQuestion(id, title) {
     if (id === undefined || id === null) return
-    question.value = { id: String(id), title: title || '当前题目' }
+    questionId.value = String(id)
+    questionTitle.value = title || '当前题目'
     openPanel()
   }
 
   function clearQuestion() {
-    question.value = null
+    questionId.value = null
+    questionTitle.value = ''
   }
 
   async function loadQuota() {
@@ -141,6 +141,7 @@ export const useAssistantStore = defineStore('assistant', () => {
     return trimmed
   }
 
+  /** 错误码 → 文案：与 04 B5.3 共用同一张表（request.js 导出），不再维护第二份。 */
   function messageForError(error) {
     if (!error) return '请求失败，请稍后重试'
     return FALLBACK_MESSAGES[error.code] || error.message || '请求失败，请稍后重试'
@@ -154,7 +155,7 @@ export const useAssistantStore = defineStore('assistant', () => {
       notice.value = `单次提问不超过 ${MAX_SINGLE_CHARS} 字`
       return false
     }
-    if (isStreaming.value) return false
+    if (streaming.value) return false
     if (!bypassInterval && Date.now() - lastSentAt < MIN_INTERVAL_MS) {
       notice.value = '请稍后再试（两次提问间隔 3 秒）'
       return false
@@ -178,10 +179,7 @@ export const useAssistantStore = defineStore('assistant', () => {
 
     let receivedMeta = false
     let receivedDone = false
-    const payload = {
-      messages: buildContext(),
-      questionId: question.value ? question.value.id : null
-    }
+    const payload = { messages: buildContext(), questionId: questionId.value }
 
     try {
       await streamChat({
@@ -253,7 +251,7 @@ export const useAssistantStore = defineStore('assistant', () => {
 
   /** 重新生成：取最后一条用户消息，移除其后的助手气泡后重发。 */
   function regenerate() {
-    if (isStreaming.value) return
+    if (streaming.value) return
     const lastUser = [...messages.value].reverse().find((msg) => msg.role === 'user')
     if (!lastUser) return
     const lastUserIndex = messages.value.lastIndexOf(lastUser)
@@ -265,21 +263,19 @@ export const useAssistantStore = defineStore('assistant', () => {
   watch(
     () => userStore.isLogin,
     (loggedIn) => {
-      if (!loggedIn) {
-        open.value = false
-        resetSession()
-      }
+      if (!loggedIn) reset()
     }
   )
 
   return {
-    open,
+    visible,
     state,
     messages,
+    questionId,
     question,
+    streaming,
     quota,
     notice,
-    isStreaming,
     quotaExhausted,
     openPanel,
     closePanel,
@@ -290,6 +286,6 @@ export const useAssistantStore = defineStore('assistant', () => {
     send,
     stop,
     regenerate,
-    resetSession
+    reset
   }
 })

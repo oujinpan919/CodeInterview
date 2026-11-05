@@ -70,7 +70,7 @@ public class LlmStreamClient {
                     continue;
                 }
                 log.warn("[ai] upstream http status={}, errorBody={}", status, errorBody);
-                throw new UpstreamHttpException(status, errorBody);
+                throw new UpstreamHttpException(status);
             } catch (HttpTimeoutException ex) {
                 // 首 token 超时不做自动重试，避免用户等 40s（05 §2.2）
                 throw new UpstreamTimeoutException("等待上游响应超时", ex);
@@ -112,7 +112,8 @@ public class LlmStreamClient {
         }
         String apiKey = props.getApiKey() == null ? "" : props.getApiKey();
         return HttpRequest.newBuilder(URI.create(chatCompletionsUrl()))
-                // 只约束「等到响应头」：首 token 超时的真正兜底是 20s watchdog
+                // 只约束「等到响应头」：JDK ofInputStream 的正文读取不受该 timeout 限制（实测 3s 超时下
+                // 8s 流式响应仍能读完）；首 token 20s / 空闲 45s / 总长 180s 由 watchdog 负责（05 §2.2）
                 .timeout(Duration.ofMillis(props.getFirstTokenTimeoutMs()))
                 .header("Content-Type", "application/json")
                 .header("Accept", "text/event-stream")
@@ -162,12 +163,12 @@ public class LlmStreamClient {
         }
     }
 
-    /** 上游非 200（首 token 之前）。status 用于 §9.2 映射，不透给前端。 */
+    /** 上游非 200（首 token 之前）。status 用于 §9.2 映射，不透给前端；错误体已在 WARN 日志里。 */
     public static class UpstreamHttpException extends RuntimeException {
 
         private final int status;
 
-        public UpstreamHttpException(int status, String body) {
+        public UpstreamHttpException(int status) {
             super("upstream http " + status);
             this.status = status;
         }

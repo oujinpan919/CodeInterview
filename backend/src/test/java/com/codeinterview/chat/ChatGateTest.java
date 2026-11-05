@@ -191,6 +191,8 @@ class ChatGateTest extends ChatTestSupport {
         verify(quotaService).rollbackSite(any());
         verify(quotaService).rollbackUser(anyLong(), any());
         verify(rateGate).release(1L);
+        // 不建流：已登记的流必须摘掉，避免 watchdog 稍后重复回滚/写假审计
+        verify(registry).unregister(any());
     }
 
     @Test

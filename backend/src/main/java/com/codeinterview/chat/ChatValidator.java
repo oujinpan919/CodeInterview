@@ -42,12 +42,16 @@ public class ChatValidator {
         if (req.getQuestionId() != null && questionMapper.countPublished(req.getQuestionId()) == 0) {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
+        List<Msg> messages = trimToBudget(normalize(req.getMessages()));
+        validateAfterTrim(messages);
+        return messages;
+    }
 
-        List<Msg> rawMessages = req.getMessages();
+    /** 角色白名单：system 丢弃（不允许覆盖服务端 system），其余非法角色 40000。 */
+    private List<Msg> normalize(List<Msg> rawMessages) {
         if (rawMessages == null || rawMessages.isEmpty()) {
             throw paramError("messages 不能为空");
         }
-
         List<Msg> messages = new ArrayList<>(rawMessages.size());
         for (Msg raw : rawMessages) {
             if (raw == null) {
@@ -55,7 +59,6 @@ public class ChatValidator {
             }
             String role = raw.getRole() == null ? "" : raw.getRole().trim().toLowerCase();
             if (ROLE_SYSTEM.equals(role)) {
-                // 客户端 system 一律丢弃，不允许覆盖服务端 system（05 §3.2 补充约定）
                 continue;
             }
             if (!ROLE_USER.equals(role) && !ROLE_ASSISTANT.equals(role)) {
@@ -69,19 +72,25 @@ public class ChatValidator {
         if (messages.isEmpty()) {
             throw paramError("messages 不能为空");
         }
+        return messages;
+    }
 
-        // 1) 先按条数截：只保留最近 maxMessages 条
+    /** 静默裁剪：先按条数截最近 N 条，再按总字符从最旧丢，末条（当前用户消息）必须保留。 */
+    private List<Msg> trimToBudget(List<Msg> messages) {
+        List<Msg> trimmed = messages;
         int maxMessages = props.getMaxMessages();
-        if (messages.size() > maxMessages) {
-            messages = new ArrayList<>(messages.subList(messages.size() - maxMessages, messages.size()));
+        if (trimmed.size() > maxMessages) {
+            trimmed = new ArrayList<>(trimmed.subList(trimmed.size() - maxMessages, trimmed.size()));
         }
-        // 2) 再按总字符截：从最旧开始逐条丢，末条（当前用户消息）必须保留
         int maxChars = props.getMaxChars();
-        while (messages.size() > 1 && totalChars(messages) > maxChars) {
-            messages.remove(0);
+        while (trimmed.size() > 1 && totalChars(trimmed) > maxChars) {
+            trimmed.remove(0);
         }
+        return trimmed;
+    }
 
-        // 3) 裁剪后仍不合规才 40000
+    /** 裁剪后仍不合规才 40000。 */
+    private void validateAfterTrim(List<Msg> messages) {
         Msg last = messages.get(messages.size() - 1);
         if (!ROLE_USER.equals(last.getRole())) {
             throw paramError("最后一条消息必须是用户消息");
@@ -94,10 +103,9 @@ public class ChatValidator {
                 throw paramError("单条消息不能超过 " + props.getMaxSingleChars() + " 个字符");
             }
         }
-        if (totalChars(messages) > maxChars) {
+        if (totalChars(messages) > props.getMaxChars()) {
             throw paramError("内容过长，请缩短后重试");
         }
-        return messages;
     }
 
     private int totalChars(List<Msg> messages) {

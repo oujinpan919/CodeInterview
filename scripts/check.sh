@@ -102,7 +102,7 @@ if [[ -d frontend/dist/assets ]]; then
     pass "dist 最大 JS gzip ≤300KB（$(basename "$MAX_FILE") gzip=${MAX}B）"
   fi
 else
-  pass "dist 最大 JS gzip 检查 SKIP（frontend/dist 不存在，先 npm run build）"
+  fail "dist 最大 JS gzip ≤300KB" "frontend/dist 不存在：先 cd frontend && npm run build 再跑本脚本"
 fi
 
 echo

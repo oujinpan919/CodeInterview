@@ -284,7 +284,7 @@ async function askAssistant() {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
-  assistantStore.openWithQuestion({ id: question.value.id, title: question.value.title })
+  assistantStore.openWithQuestion(question.value.id, question.value.title)
 }
 
 /**

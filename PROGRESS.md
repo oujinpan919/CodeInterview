@@ -604,13 +604,22 @@
 
 **偏离登记**：见 `开发文档/02 §10`（check.sh 检查口径、前端非 id 数值写法、构建体积、ACCEPTANCE.md 新增）
 
+### C2 代码审查与修复（T14–T20）✅
+
+**方式**：`code-review` 技能双轴并行（fixed point `8d0ed6a` = T13 完成提交；diff `8d0ed6a...HEAD`），Standards + Spec 各一个子代理独立产出，汇总后逐项裁决。
+
+- **Standards 轴**：7 项硬违规 + 9 项判断题。已修 5 项硬违规：① `ChatService` 大方法拆分（`doChat/startStream/runStream/readUpstream/completeStream`，均 ≤60 行）；② 魔法值常量化（status 1/2/3、难度 1/3、上游码映射单表）；③ sid 日志；④ assistant store 契约命名对齐 02 §4.7；⑤ AI 输入框移动端 16px + `scrollIntoView`；另修错误文案表重复（复用 `FALLBACK_MESSAGES`）。**判断保留**：`AttachmentTags` 等既有重复、`ParseResult.finishReason/isError` 仅测试引用、`resetForTest` 测试钩子、`cancelled/clientAborted` 命名、`StreamState` public 字段（收尾逻辑与 watchdog 共享，改动收益低）——均登记 02 §10。
+- **Spec 轴**：✓ 已修 3 项：① 线程池拒绝漏 `unregister`（严重：watchdog 180s 后对不存在的流重复回滚 + 假审计，已在 `ChatGateTest` 加断言）；② sid 无人消费；③ 流前拒绝无 INFO。✓ 已改 1 项：`check.sh` dist 缺失改为 FAIL（不再 SKIP 冒充通过）。**判断/登记**：T19 只改了真正不达标的 2 个文件（其余页面既有实现巡检通过，见 T19 记录）；`router` 守卫「仅 401 才清态」属 T19 巡检发现并登记的修复；`mock-429` 映射两处文档矛盾按 05 §9.2 实现并登记；HTTP 超时语义实测澄清（3s 超时下 8s 流式响应仍完整读取），实现不改。
+- 修复后回归：`mvn -q test` 39/39、`npm run lint`、`npm run build`、`bash scripts/check.sh` 11/11 全绿。
+
 ---
 
 ## 【交付总结 · 会话 C（T14–T20）】
 
 - **状态**：20 张卡全部完成，A1/A2/A3/B1/B2/C1/C2 七个检查点全部通过；交付前 `mvn -q test`（39 用例）、`npm run lint`、`npm run build`、`bash scripts/check.sh`（11 项）全绿。
-- **提交记录**（由新到旧，7 条）：
+- **提交记录**（由新到旧，8 条）：
   ```
+  fix(T14-T20): code-review 修复（C2：拒绝路径摘流/sid 日志/输入框/契约命名/映射表）
   feat(T20): 回归与交付前全量自检（check.sh + ACCEPTANCE + 红线修复）
   feat(T19): 移动端适配巡检与修复（触控目标/会话恢复错误口径）
   feat(T18): 部署、演示数据与验收（Nginx/Dockerfile/backup.sh/seed-demo/AC 回归测试）

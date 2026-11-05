@@ -36,6 +36,8 @@ public class PromptBuilder {
     private static final int ANSWER_LIMIT = 1200;
     private static final int SYSTEM_LIMIT = 4000;
     private static final String ELLIPSIS = "…";
+    private static final int DIFFICULTY_EASY = 1;
+    private static final int DIFFICULTY_HARD = 3;
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是「码上记」站内的面试题讲解助手。只讨论计算机基础与面试相关话题；
             先给结论再展开，输出 Markdown，代码放带语言标注的围栏代码块，单轮回答控制在 800 字以内；
@@ -129,8 +131,8 @@ public class PromptBuilder {
             return "中等";
         }
         return switch (difficulty) {
-            case 1 -> "简单";
-            case 3 -> "困难";
+            case DIFFICULTY_EASY -> "简单";
+            case DIFFICULTY_HARD -> "困难";
             default -> "中等";
         };
     }

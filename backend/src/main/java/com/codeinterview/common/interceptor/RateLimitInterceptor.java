@@ -112,8 +112,4 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         hits.clear();
         operations.set(0);
     }
-
-    public int getLimit() {
-        return limit;
-    }
 }

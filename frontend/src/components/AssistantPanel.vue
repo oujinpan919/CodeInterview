@@ -1,7 +1,7 @@
 <template>
   <div v-if="!isAuthPage" class="assistant">
     <button
-      v-if="!store.open"
+      v-if="!store.visible"
       type="button"
       class="assistant__launcher"
       aria-label="打开 AI 助手"
@@ -109,7 +109,7 @@
         <div class="assistant__input-foot">
           <span class="assistant__count">{{ draft.length }}/2000</span>
           <button
-            v-if="store.isStreaming"
+            v-if="store.streaming"
             type="button"
             class="assistant__send assistant__send--stop"
             @click="store.stop()"
@@ -172,7 +172,7 @@ const inputPlaceholder = computed(() =>
   store.quotaExhausted ? '今日额度已用完' : '问问 AI 助手…（Enter 发送，Shift+Enter 换行）'
 )
 const sendDisabled = computed(
-  () => draft.value.trim().length === 0 || store.isStreaming || store.quotaExhausted
+  () => draft.value.trim().length === 0 || store.streaming || store.quotaExhausted
 )
 
 async function handleLauncher() {
@@ -194,10 +194,20 @@ async function handleLauncher() {
 
 function fillExample(text) {
   draft.value = text
-  nextTick(() => {
-    inputRef.value && inputRef.value.focus()
-    resizeInput()
-  })
+  nextTick(focusInput)
+}
+
+/** 聚焦输入框并把软键盘可能遮挡的位置滚到视口中间（04 B7.3）。 */
+function focusInput() {
+  const el = inputRef.value
+  if (!el) return
+  el.focus()
+  try {
+    el.scrollIntoView({ block: 'center' })
+  } catch {
+    // 测试/非浏览器环境忽略
+  }
+  resizeInput()
 }
 
 function resizeInput() {
@@ -213,10 +223,7 @@ async function handleSend() {
   draft.value = ''
   const sent = await store.send(text)
   if (!sent) draft.value = text
-  nextTick(() => {
-    resizeInput()
-    if (inputRef.value) inputRef.value.focus()
-  })
+  nextTick(focusInput)
 }
 
 function onScroll() {
@@ -239,14 +246,13 @@ watch(
 )
 
 watch(
-  () => store.open,
-  async (open) => {
-    if (!open) return
+  () => store.visible,
+  async (visible) => {
+    if (!visible) return
     stickToBottom.value = true
     await scrollToBottom()
     await nextTick()
-    if (inputRef.value) inputRef.value.focus()
-    resizeInput()
+    focusInput()
   }
 )
 </script>
@@ -579,6 +585,11 @@ watch(
 
   .assistant__messages {
     padding: var(--space-3);
+  }
+
+  .assistant__textarea {
+    /* 04 B7.3：输入框 ≥16px，避免 iOS 聚焦自动放大 */
+    font-size: 16px;
   }
 
   .assistant__bubble {

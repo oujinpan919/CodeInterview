@@ -16,8 +16,8 @@ const BASE_URL = import.meta.env.VITE_API_BASE || '/api/v1'
 const DEFAULT_TIMEOUT = 15000
 const NETWORK_ERROR_MESSAGE = '网络异常，请稍后重试'
 
-// 04 B5.3 前端兜底文案（后端 message 优先）
-const FALLBACK_MESSAGES = {
+// 04 B5.3 前端兜底文案（后端 message 优先）；assistant store 复用同一张表
+export const FALLBACK_MESSAGES = {
   40100: '登录已过期，请重新登录',
   40300: '没有权限执行该操作',
   40301: '需要管理员权限',
