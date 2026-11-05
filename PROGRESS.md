@@ -275,6 +275,26 @@
 
 **偏离登记**：见 `开发文档/02 §10`（辅助 VO 清单、跨用户 DELETE 口径按 04 #18、markResolved 用影响行数 + 存在性判定区分 40400/40300）。
 
+### T11 · 统计与图表 ✅
+
+**改动文件**
+- 后端（新增）：`stats/{StatsController,StatsService,StatsMapper}.java`、`resources/mapper/StatsMapper.xml`、`stats/vo/{StatsOverviewResp,TrendPointResp,CategoryStatResp,StatsSummaryRow,TrendRow}.java`
+- 前端（新增）：`src/components/BaseChart.vue`、`src/api/stats.js`
+- 前端（修改）：`src/views/Records.vue`（5 指标卡 + 折线/饼图，保留 T09 记录列表）、`src/assets/styles/base.css`（图表 5 色 token）
+
+**验收（真实输出，2026-11-05，真实 DB + curl + headless Edge/CDP）**
+- `GET /stats/overview` → `{"todayCount":20,"weekCount":20,"masteredRate":0.25,"streak":1,"totalQuestionCount":3,"totalRecordCount":20}`；与手写 SQL 逐项一致：today 20 / week 20 / total 20 / mastered 5 / distinct 3；`totalQuestionCount(3) ≤ totalRecordCount(20)`
+- 两个总量口径分开：`totalQuestionCount`=去重题数（3），`totalRecordCount`=条数（20），分类合计只与后者对得上
+- `GET /stats/trend?days=7` → 7 条连续日期、首尾相差 6 天、末日=今日；`days=30` → 30 条；`days=15` → 回落 30 条
+- `GET /stats/category` → 3 类（Java count=15 rate=0.2667 / MySQL count=3 rate=0.3333 / Redis count=2 rate=0.0），`count` 合计 20 == `totalRecordCount`
+- 全新用户（t11user）：`masteredRate=null`、全 0、`streak=0`、trend 全 0、category `[]`（前端显示「—」与「暂无数据」，不渲染空坐标系）
+- 连续天数：临时给 t11user 插入「昨天 + 前天」记录 → `streak=2`（今日无记录从昨日算起）；再加今日 → `streak=3`；顺带核对 `totalQuestionCount=2 / totalRecordCount=3`
+- 浏览器：5 卡「今日自评 / 近 7 天 / 掌握率 / 连续天数 / 累计题数」= `20 | 20 | 25% | 1 天 | 3`，累计题数卡标注「共 20 次自评」；两张 ECharts canvas 渲染（每日自评趋势 / 分类掌握分布）；切 30 天只重拉 trend（trend 请求 1→2、overview 仍 1 次）；375×667 指标卡 2 列且第 5 张整行（last=343 vs first=166）、图表上下堆叠同宽、无横向滚动 `375/375`、图表高 240px；新用户两图均显示「暂无数据」且 canvas=0
+- `mvn -q clean package -DskipTests` exit 0；`npm run lint` / `npm run build` exit 0
+
+**偏离登记**：见 `开发文档/02 §10`（新增 `StatsMapper` 与辅助 VO、指标卡共用单接口的失败表现、图表色 token 落在 base.css）。
+
+
 
 
 

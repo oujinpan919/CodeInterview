@@ -31,6 +31,13 @@
   --color-danger-rgb: 220, 38, 38;
   --color-text-rgb: 31, 41, 55;
 
+  /* 图表 5 色循环（04 B6）：ECharts 通过 getComputedStyle 读取，组件内不写死色值 */
+  --color-chart-1: #2563eb;
+  --color-chart-2: #16a34a;
+  --color-chart-3: #d97706;
+  --color-chart-4: #dc2626;
+  --color-chart-5: #7c3aed;
+
   /* 圆角 */
   --radius-card: 12px;
   --radius-button: 8px;
