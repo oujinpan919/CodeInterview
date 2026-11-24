@@ -33,7 +33,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * 每个用例自建唯一分类/标签并自清，不依赖执行顺序与库内残留数据。
  */
 @SpringBootTest
-@ActiveProfiles("mock")
+@ActiveProfiles({"mock", "test"})
 class ImportServiceTest {
 
     @Autowired

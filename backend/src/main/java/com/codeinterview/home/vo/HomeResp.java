@@ -4,11 +4,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.codeinterview.question.vo.QuestionBriefResp;
+import com.codeinterview.review.vo.ReviewSummaryResp;
 
 import lombok.Data;
 
 /**
- * 首页聚合（04 A3.2 #7）；continueLearning 未登录时为 null。
+ * 首页聚合（04 A3.2 #7）；continueLearning 与 todayPlan 未登录时为 null。
  */
 @Data
 public class HomeResp {
@@ -17,6 +18,8 @@ public class HomeResp {
     private List<QuestionBriefResp> latest;
     private List<QuestionBriefResp> hot;
     private List<HomeContinueLearning> continueLearning;
+    /** 今日计划（v3.6 / 01 F-009）：待复习 + 新题 + 估算分钟；游客 null */
+    private ReviewSummaryResp todayPlan;
 
     @Data
     public static class HomeCategory {

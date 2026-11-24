@@ -30,6 +30,9 @@ public class User {
     /** 昵称 = 登录名 + 展示名，2-20 字，全站唯一（大小写不敏感） */
     private String nickname;
 
+    /** v4.12 头像 URL（存 OSS 地址）；null 时前端回退为首字母色块 */
+    private String avatar;
+
     /** BCrypt 哈希（cost=12） */
     private String password;
 

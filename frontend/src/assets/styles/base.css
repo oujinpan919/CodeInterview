@@ -16,14 +16,26 @@
   --color-primary: #2563eb;
   --color-primary-hover: #1d4ed8;
   --color-success: #16a34a;
+  /* v4.1：正文级绿色。--color-success(#16a34a) 对白底仅 3.09:1，
+     只够做 12px 徽标/图标；16px 标题必须用这个更深的绿（白底 5.2:1，过 WCAG AA）。 */
+  --color-success-text: #15803d;
   --color-warning: #d97706;
   --color-danger: #dc2626;
   --color-text: #1f2937;
   --color-text-secondary: #6b7280;
   --color-text-disabled: #9ca3af;
+  /* v3.21：语义别名。AI 页面此前用 --color-text-primary 但未定义，文字颜色静默失效。 */
+  --color-text-primary: var(--color-text);
+  --color-on-primary: #ffffff;
   --color-bg-page: #f7f8fa;
   --color-bg-card: #ffffff;
   --color-border: #e5e7eb;
+
+  /* 语义强调色（v3.7 视觉优化）：只用于「今日行动区」的暖色分区，与主色蓝区分；
+     正文与按钮主操作仍用 --color-primary，避免两种强色抢主次 */
+  --color-accent: #d97706;
+  --color-accent-rgb: 217, 119, 6;
+  --color-accent-soft: #fffbeb;
 
   /* 供 rgba(var(--*-rgb), alpha) 派生的软背景与阴影；组件内不得再写死 rgba 色值 */
   --color-primary-rgb: 37, 99, 235;
@@ -42,6 +54,25 @@
   --radius-card: 12px;
   --radius-button: 8px;
   --radius-tag: 4px;
+  /* v3.21：补齐组件层级圆角别名。此前 AI 页面用了 --radius-md/--radius-lg 但未定义，
+     浏览器静默忽略导致圆角回退为 0（卡片看起来“平”）。这里统一映射到既有令牌。 */
+  --radius-sm: var(--radius-tag);
+  --radius-md: var(--radius-button);
+  --radius-lg: var(--radius-card);
+  --radius-full: 999px;
+
+  /* 层次与动效（v3.7）：卡片默认极轻投影 + hover 抬升；全站统一缓动与时长 */
+  --shadow-card: 0 1px 2px rgba(var(--color-text-rgb), 0.05);
+  --shadow-card-hover: 0 10px 24px -12px rgba(var(--color-text-rgb), 0.22);
+  --shadow-float: 0 12px 32px -12px rgba(var(--color-text-rgb), 0.24);
+  --motion-fast: 0.15s;
+  --motion-base: 0.18s;
+  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* 顶部导航毛玻璃（v3.7）：sticky + 半透明，滚动时内容从下透出，视觉更轻；
+     alpha 取 0.86 而非 0.6 —— 不支持 backdrop-filter 的浏览器下仍保证文字可读 */
+  --header-bg: rgba(255, 255, 255, 0.86);
+  --header-blur: 10px;
 
   /* 间距（4 的倍数；区块间距 24、卡片内边距 20） */
   --space-1: 4px;
@@ -56,14 +87,43 @@
   --space-16: 64px;
 
   /* 字号（桌面；<768 在媒体查询内下调一档） */
+  /* v3.28：全站基准字号对齐豆包网页版（实测 body 16px / 行高 24px）。
+     原 14/22 整体偏小；本次只提基准与一级标题行高，辅助字号维持 12/18（豆包同为 12）。 */
   --font-size-h1: 28px;
-  --line-height-h1: 36px;
+  --line-height-h1: 38px;
   --font-size-h2: 22px;
   --line-height-h2: 30px;
-  --font-size-body: 14px;
-  --line-height-body: 22px;
+  --font-size-body: 16px;
+  --line-height-body: 24px;
   --font-size-aux: 12px;
   --line-height-aux: 18px;
+  /* v3.21：语义字号别名（AI 页面此前用 --font-size-base/lg/xl 但均未定义） */
+  --font-size-base: var(--font-size-body);
+  --line-height-base: var(--line-height-body);
+  --font-size-lg: var(--font-size-h2);
+  --line-height-lg: var(--line-height-h2);
+  --font-size-sm: var(--font-size-aux);
+  --line-height-sm: var(--line-height-aux);
+  --font-size-xl: 26px;
+  --line-height-xl: 34px;
+
+  /* v3.23 建立、v4.0 校准：AI 应用态灰阶（/assistant 与 /assistant/settings 共用一套，
+     由 Assistant.vue 的 --ap-* 与 AssistantSettings.vue 的 --ais 共同引用）。
+     校准依据：原 --ai-text-2(#8a8f99) 对白底仅 3.0:1，12–13px 辅助文字不过 WCAG AA；
+     现降一档到 #626977（白底 5.5:1、灰底 5.2:1），--ai-text-3 只留给占位符与装饰线。 */
+  --ai-sidebar-bg: #f8f8fa;
+  --ai-hover: #eff0f3;
+  --ai-active: #e8eaee;
+  --ai-text: #16181d;
+  --ai-text-2: #626977;
+  --ai-text-3: #8f95a1;
+  --ai-border: #ececef;
+  --ai-border-strong: #dcdfe5;
+  --ai-bubble: #eef2fb;
+  --ai-tint: #f5f7ff;
+  --ai-radius-card: 20px;
+  --ai-radius-md: 14px;
+  --ai-radius-sm: 10px;
 
   /* 字体 */
   --font-family-base:
@@ -75,8 +135,12 @@
   --layout-max-width: 1200px;
   --layout-gutter: 24px;
   --header-height: 64px;
-  --footer-height: 80px;
-  --content-min-height: calc(100vh - var(--header-height) - var(--footer-height));
+  /*
+   * v4.11：删除 --footer-height / --content-min-height。
+   * 页脚改为多栏后高度随断点变化（桌面约 210px、移动端约 330px），
+   * 写死 80px 会让「撑满一屏」算错、把页脚挤出首屏。
+   * 现在由 DefaultLayout 的 flex column + main 的 flex: 1 0 auto 自动撑满。
+   */
 
   /* 断点（CSS 变量仅作文档与 JS 参考；媒体查询需写具体值）
      sm: < 768px 手机 | md: 768–1023px 平板 | lg: 1024–1279px 小笔记本 | xl: ≥ 1280px 桌面 */
@@ -249,10 +313,12 @@ samp {
    3. 响应式基线（04 B7.1；媒体查询四档，值必须与 --bp-* 一致）
    --------------------------------------------------------------------------- */
 
-/* 弹窗/确认框宽度上限：375 宽下不得出现横向滚动（04 B7.4） */
-.el-message-box,
-.taxonomy__prompt {
-  max-width: calc(100vw - 32px);
+/* 弹窗/确认框宽度上限（04 B7.4）：
+   Element 自身是 width:100% + max-width:420px，这里必须「两者取小」，
+   只写 calc(100vw - 32px) 会把 420px 的上限冲掉，桌面端弹窗被拉满全宽；
+   窄屏（<452px）才真正收窄到 calc(100vw - 32px)，避免横向滚动。 */
+.el-message-box {
+  max-width: min(var(--el-messagebox-width, 420px), calc(100vw - 32px));
 }
 
 /* md：768–1023px 平板 */
@@ -270,6 +336,11 @@ samp {
     --font-size-h2: 20px;
     --line-height-h2: 28px;
     --layout-gutter: 16px;
+    /* v3.21：语义别名同步下调，避免别名把桌面字号“锁死”在小屏 */
+    --font-size-lg: var(--font-size-h2);
+    --line-height-lg: var(--line-height-h2);
+    --font-size-xl: 20px;
+    --line-height-xl: 28px;
   }
 
   /* 输入框 ≥16px，避免 iOS 聚焦时自动放大（B7.3） */
@@ -283,6 +354,21 @@ samp {
 }
 
 /* xl：≥1280px 桌面，内容宽 1200px（由布局组件使用 --layout-max-width） */
+
+/* 路由切换过渡（v3.7）：只用透明度 + 4px 位移，避免布局抖动；
+   App.vue 的 <Transition name="route-fade" mode="out-in"> 使用 */
+.route-fade-enter-active,
+.route-fade-leave-active {
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+.route-fade-enter-from,
+.route-fade-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
 
 /* 尊重系统「减少动态效果」设置 */
 @media (prefers-reduced-motion: reduce) {

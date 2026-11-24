@@ -1,12 +1,14 @@
 <template>
   <DefaultLayout>
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="route-fade" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </RouterView>
   </DefaultLayout>
-  <AssistantPanel />
 </template>
 
 <script setup>
 import { RouterView } from 'vue-router'
 import DefaultLayout from '@/layout/DefaultLayout.vue'
-import AssistantPanel from '@/components/AssistantPanel.vue'
 </script>

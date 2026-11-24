@@ -6,9 +6,10 @@ export function getQuestions(params) {
   return request.get('/questions', { params })
 }
 
-/** 详情（04 A3.3 #9）：一次返回 question / myFavorite / myAssessment / neighbors */
-export function getQuestionDetail(id) {
-  return request.get(`/questions/${id}`)
+/** 详情（04 A3.3 #9）：一次返回 question / myFavorite / myAssessment / neighbors。
+ *  v3.6 修1：params 可带 ctx=list|favorite|wrong（+ 列表筛选/scope），后端据此按来源列表算上下题。 */
+export function getQuestionDetail(id, params) {
+  return request.get(`/questions/${id}`, { params })
 }
 
 /** 收藏（04 A3.3 #11）：幂等，重复收藏仍成功 */
@@ -24,4 +25,22 @@ export function unfavoriteQuestion(id) {
 /** 我的收藏（04 A3.3 #13）：Page<QuestionBrief & { favoritedAt }> */
 export function getFavorites(params) {
   return request.get('/favorites', { params })
+}
+
+export function getRandomQuestion(params) {
+  return request.get('/questions/random', { params })
+}
+
+/** v3.6 C10：相似题（同分类优先 + 共享标签），默认 3 条 */
+export function getSimilarQuestions(id, params) {
+  return request.get(`/questions/${id}/similar`, { params })
+}
+
+/**
+ * v4.2：最近浏览的题目（题目练习页左侧列表）。
+ * 未登录时后端直接返回空数组，调用方按空态处理即可。
+ * @param {{ limit?: number, categoryId?: number|string }} params
+ */
+export function getRecentViews(params) {
+  return request.get('/questions/recent-views', { params })
 }

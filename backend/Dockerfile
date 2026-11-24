@@ -6,7 +6,8 @@
 #
 # 运行（与 Nginx 同网络，数据库用本机 MySQL 时 DB_HOST 填 host.docker.internal 或宿主 IP）：
 #   docker run -d --name codeinterview-backend --env-file ../.env \
-#     -p 8080:8080 codeinterview-backend:1.0.0
+#     -p 127.0.0.1:8080:8080 codeinterview-backend:1.0.0
+#   ↑ 只绑宿主机回环，避免绕过 Nginx 直连 8080；容器间部署则由 Docker 网络访问，不要 publish。
 #
 # 注意：本镜像只跑 jar；前端 dist 由 Nginx 托管（见 nginx/default.conf）。
 # 密钥只通过环境变量注入（AI_API_KEY / DB_PASSWORD / ADMIN_INIT_PASSWORD），不写进镜像。

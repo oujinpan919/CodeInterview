@@ -48,7 +48,9 @@ public class AdminInitializer implements ApplicationRunner {
                 log.warn("admin init-password is not configured, skip creating admin");
                 return;
             }
-            String policyError = PasswordPolicy.validate(initPassword, ADMIN_NICKNAME);
+            String policyError = isProdProfile()
+                    ? PasswordPolicy.validateAdminForProd(initPassword, ADMIN_NICKNAME)
+                    : PasswordPolicy.validate(initPassword, ADMIN_NICKNAME);
             if (policyError != null) {
                 if (isProdProfile()) {
                     log.error("admin init password rejected by policy, skip creating admin");

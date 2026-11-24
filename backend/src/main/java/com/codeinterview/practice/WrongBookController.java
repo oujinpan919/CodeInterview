@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.codeinterview.common.result.PageResp;
 import com.codeinterview.common.result.Result;
 import com.codeinterview.practice.vo.WrongBookItemResp;
+import com.codeinterview.practice.vo.WrongBookSummaryResp;
 import com.codeinterview.practice.vo.WrongResolvedResp;
 
 import cn.dev33.satoken.stp.StpUtil;
@@ -19,7 +20,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 错题本（04 A2 #16–#18）。userId 只从登录态取。
+ * 错题本 / 复习条目（04 A2 #16–#19）。userId 只从登录态取。
  */
 @Tag(name = "错题本")
 @RestController
@@ -29,14 +30,25 @@ public class WrongBookController {
 
     private final WrongBookService wrongBookService;
 
-    @Operation(summary = "错题本列表（resolved=0 未掌握 / 1 已掌握；status=2 由前端置灰）")
+    @Operation(summary = "错题本列表（scope=learning/reviewing/mastered/reviewed/all；status=2 由前端置灰）")
     @GetMapping("/wrong-book")
     public Result<PageResp<WrongBookItemResp>> list(
             @RequestParam(required = false) Integer resolved,
+            @RequestParam(required = false) String scope,
             @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer pageSize) {
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Integer difficulty) {
         Long userId = StpUtil.getLoginIdAsLong();
-        return Result.success(wrongBookService.page(userId, resolved, page, pageSize));
+        return Result.success(wrongBookService.page(userId, resolved, scope, page, pageSize,
+                categoryId, difficulty));
+    }
+
+    @Operation(summary = "三个视图角标（在学 / 待回顾 / 真掌握）")
+    @GetMapping("/wrong-book/summary")
+    public Result<WrongBookSummaryResp> summary() {
+        Long userId = StpUtil.getLoginIdAsLong();
+        return Result.success(wrongBookService.summary(userId));
     }
 
     @Operation(summary = "标记掌握（幂等；无记录 40400，他人记录 40300）")

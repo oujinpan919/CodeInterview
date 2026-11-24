@@ -15,6 +15,12 @@ frontend/node_modules/
 frontend/dist/
 # 备份产物（scripts/backup.sh 输出），不入库
 backups/
+# 课程/交付截图与 Python 缓存，不入库
+deliverables/
+__pycache__/
+*.pyc
+# 图标生成脚本的下载缓存（缺失时会自动联网补下载，无需入库）
+scripts/_icons/
 .idea/
 *.iml
 .DS_Store

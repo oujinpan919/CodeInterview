@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.codeinterview.support.ChatTestSupport;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * T15 / 05 §12：#5 首 token 超时（50202 + 配额回滚 + 可继续使用）、#13 usage 缺失 estimated=1。
  */
 @Timeout(120)
+@ActiveProfiles({"mock", "test"})
 class ChatQuotaTest extends ChatTestSupport {
 
     @Test

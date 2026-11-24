@@ -34,6 +34,11 @@ public class AiProperties {
     private int maxChars = 6000;
     private int maxSingleChars = 2000;
     private String systemPromptFile = "classpath:prompt/system.txt";
+    /**
+     * v3.20：是否允许 OutboundUrlGuard 连接私有网段。
+     * 仅 mock/集成测试可置 true（mock 上游监听 127.0.0.1）；生产必须 false。
+     */
+    private boolean allowPrivateNetwork = false;
 
     private Quota quota = new Quota();
     private Limit limit = new Limit();

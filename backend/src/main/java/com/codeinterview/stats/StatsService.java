@@ -16,6 +16,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 import com.codeinterview.stats.vo.CategoryStatResp;
+import com.codeinterview.stats.vo.DifficultyStatResp;
 import com.codeinterview.stats.vo.StatsOverviewResp;
 import com.codeinterview.stats.vo.StatsSummaryRow;
 import com.codeinterview.stats.vo.TrendPointResp;
@@ -50,9 +51,15 @@ public class StatsService {
         resp.setTodayCount(summary.getTodayCount());
         resp.setWeekCount(summary.getWeekCount());
         resp.setTotalRecordCount(summary.getTotalCount());
-        resp.setTotalQuestionCount(statsMapper.countDistinctQuestions(userId));
+        long coveredQuestionCount = statsMapper.countDistinctQuestions(userId);
+        long publishedQuestionCount = statsMapper.countPublishedQuestions();
+        resp.setTotalQuestionCount(coveredQuestionCount);
+        resp.setPublishedQuestionCount(publishedQuestionCount);
+        resp.setCoverageRate(rate(coveredQuestionCount, publishedQuestionCount));
         resp.setMasteredRate(rate(summary.getMasteredCount(), summary.getTotalCount()));
         resp.setStreak(computeStreak(statsMapper.selectDistinctDays(userId, STREAK_LOOKBACK_DAYS), today));
+        resp.setDifficultyDistribution(difficultyDistribution(userId));
+        resp.setCompletedSessionCount(completedSessionCount(userId));
         return resp;
     }
 
@@ -102,5 +109,39 @@ public class StatsService {
             cursor = cursor.minusDays(1);
         }
         return streak;
+    }
+
+    private List<DifficultyStatResp> difficultyDistribution(Long userId) {
+        try {
+            List<DifficultyStatResp> rows = statsMapper.selectDifficultyStats(userId);
+            Map<Integer, DifficultyStatResp> byDifficulty = new HashMap<>();
+            if (rows != null) {
+                for (DifficultyStatResp row : rows) {
+                    byDifficulty.put(row.getDifficulty(), row);
+                }
+            }
+            List<DifficultyStatResp> result = new ArrayList<>(3);
+            for (int difficulty = 1; difficulty <= 3; difficulty++) {
+                DifficultyStatResp row = byDifficulty.get(difficulty);
+                if (row == null) {
+                    row = new DifficultyStatResp();
+                    row.setDifficulty(difficulty);
+                    row.setCount(0L);
+                    row.setMasteredRate(null);
+                }
+                result.add(row);
+            }
+            return result;
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+
+    private Long completedSessionCount(Long userId) {
+        try {
+            return statsMapper.countCompletedSessions(userId);
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 }

@@ -52,9 +52,11 @@ public class AssessmentService {
         record.setCreatedAt(now);
         practiceRecordMapper.insert(record);
 
-        // 状态机（01 §8.3）：自评 1 = 掌握（无记录则不新建）；自评 2/3 = 进本或更新
+        // 复习条目推进（01 §8.3 / F-008，v3.6）：
+        //   自评 1 → 掌握阶梯 +1（1/3/7/15 天，第 4 次退出队列），从未有行也建行（所有自评过的题都进排程）；
+        //   自评 2/3 → 回到在学态并重新排程（自评 3 重置为 1 天，自评 2 保持原间隔）。
         if (selfAssess == PracticeRecord.ASSESS_MASTERED) {
-            wrongRecordMapper.markMastered(userId, questionId, now);
+            wrongRecordMapper.upsertMastered(userId, questionId, now);
         } else {
             wrongRecordMapper.upsertWrong(userId, questionId, selfAssess, now);
         }
@@ -78,10 +80,13 @@ public class AssessmentService {
         return selfAssess;
     }
 
-    /** source 只认 1 详情 / 3 错题本复习；传 2 或未传都按 1 处理（04 A3.4 #14）。 */
+    /** source 只认 1 详情 / 2 随机练习 / 3 错题本复习；其余归一为 1 */
     private int normalizeSource(Integer source) {
-        return source != null && source == PracticeRecord.SOURCE_WRONG_BOOK
-                ? PracticeRecord.SOURCE_WRONG_BOOK
+        return source != null
+                && (source == PracticeRecord.SOURCE_DETAIL
+                        || source == PracticeRecord.SOURCE_RANDOM
+                        || source == PracticeRecord.SOURCE_WRONG_BOOK)
+                ? source
                 : PracticeRecord.SOURCE_DETAIL;
     }
 }

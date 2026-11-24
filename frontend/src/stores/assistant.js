@@ -1,25 +1,38 @@
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { getQuota } from '@/api/ai'
+import {
+  createConversation,
+  deleteConversation,
+  getChatMeta,
+  getConversation,
+  getQuota,
+  listConversations,
+  renameConversation
+} from '@/api/ai'
 import { streamChat } from '@/utils/sse'
 import { FALLBACK_MESSAGES } from '@/utils/request'
 import { useUserStore } from '@/stores/user'
+import { preloadMarkdown } from '@/composables/useMarkdown'
 
 /**
- * 助手会话状态（02 §4.7 store 契约 / 05 §6.3 状态机）：
+ * 助手会话状态（08 §4.1 / D6 / D8 / D9 / D13）。
+ *
+ * 状态机：
  * idle → connecting → streaming → done
- *                ↘（流前错误）idle + 提示    ↘ error → failed（保留文本）
+ *                ↘（流前错误）idle + 提示      ↘ error → failed（保留文本）
  * streaming → stop() → aborted（保留文本）
  *
- * 契约字段：visible / messages / streaming / questionId / quota / openWithQuestion(id) / send / stop / reset。
- * 会话只存在内存中（刷新即清空）；服务端不持久化消息正文。
- * 额度来自 GET /ai/quota，done.quota 回来后局部更新。
+ * 关键变化（v3.20）：
+ * - **不再是浮层**（D8）：`expanded`/`collapse()` 全部移除，入口是 /assistant 路由。
+ * - **会话持久化**（D6）：消息落库，「刷新不丢」；左侧会话栏由此 store 驱动。
+ * - **后台继续**（D9）：store 保持全局单例，离开 /assistant 不中断流式；
+ *   `streaming` 被 AppHeader 读取以显示「生成中」徽标。
+ * - **模型可选**（D13）：`activeModelConfigId` 只影响当前会话，不改用户默认（A13）。
  */
 
-const MAX_MESSAGES = 10
-const MAX_CHARS = 6000
 const MAX_SINGLE_CHARS = 2000
 const MIN_INTERVAL_MS = 3000
+const CONVERSATION_PAGE_SIZE = 30
 
 let seq = 0
 
@@ -39,63 +52,261 @@ function newSessionId() {
   })
 }
 
+/* ---------------------------------------------------------------------------
+ * 出字泵（v3.19 保留）：上游 delta 是突发的，直接绑 UI 会一顿一顿。
+ * 按约 60 字/秒揭示到 displayContent，积压超过 900ms 才加速追赶。
+ * D9 注意：后台标签页 rAF 会被暂停，visibilitychange 回前台时 flush 补齐（A10）。
+ * ------------------------------------------------------------------------- */
+
+const DISPLAY_BASE_CHARS_PER_SEC = 60
+const DISPLAY_MAX_LAG_MS = 900
+
+let displayFrame = 0
+let displayMessage = null
+let displayLastAt = 0
+const displayCarry = new WeakMap()
+
+function flushDisplay(message) {
+  if (message) {
+    message.displayContent = message.content
+    displayCarry.delete(message)
+  }
+  if (displayFrame) {
+    cancelAnimationFrame(displayFrame)
+    displayFrame = 0
+  }
+}
+
+function pumpDisplay(message) {
+  if (displayMessage && displayMessage !== message) flushDisplay(displayMessage)
+  displayMessage = message
+  if (displayFrame) return
+  displayLastAt = performance.now()
+  displayFrame = requestAnimationFrame(stepDisplay)
+}
+
+function stepDisplay(now) {
+  displayFrame = 0
+  const message = displayMessage
+  if (!message) return
+  const dt = Math.max(16, now - displayLastAt)
+  displayLastAt = now
+  const revealed = message.displayContent ? message.displayContent.length : 0
+  const backlog = message.content.length - revealed
+  if (backlog <= 0) {
+    displayCarry.delete(message)
+    return
+  }
+  const carry = (displayCarry.get(message) || 0) + (DISPLAY_BASE_CHARS_PER_SEC * dt) / 1000
+  const base = Math.floor(carry)
+  displayCarry.set(message, carry - base)
+  const drain = Math.ceil((backlog * dt) / DISPLAY_MAX_LAG_MS)
+  const chars = Math.min(backlog, Math.max(base, drain, 0))
+  if (chars > 0) {
+    message.displayContent = message.content.slice(0, revealed + chars)
+  }
+  if (message.displayContent.length < message.content.length) {
+    displayFrame = requestAnimationFrame(stepDisplay)
+  }
+}
+
 export const useAssistantStore = defineStore('assistant', () => {
   const userStore = useUserStore()
 
-  const visible = ref(false)
   const state = ref('idle')
   const messages = ref([])
-  const questionId = ref(null)
-  const questionTitle = ref('')
-  const quota = ref(null)
   const notice = ref('')
   const sessionId = ref(newSessionId())
+
+  const conversations = ref([])
+  const conversationId = ref(null)
+  const conversationTotal = ref(0)
+  const conversationPage = ref(1)
+
+  const meta = ref(null)
+  const quota = ref(null)
+  const activeModelConfigId = ref(null)
+  const templateId = ref(null)
+  const questionId = ref(null)
+  const questionTitle = ref('')
 
   let controller = null
   let lastSentAt = 0
 
+  const streaming = computed(() => state.value === 'connecting' || state.value === 'streaming')
+  const unlimited = computed(() => Boolean(quota.value && quota.value.unlimited))
+  const quotaExhausted = computed(
+    () => !unlimited.value && Boolean(quota.value) && (quota.value.remaining ?? 1) <= 0
+  )
+  const allowUserOwnKey = computed(() => Boolean(meta.value && meta.value.allowUserOwnKey))
+  const hasAnyUsableConfig = computed(() => Boolean(meta.value && meta.value.hasAnyUsableConfig))
+  const models = computed(() => (meta.value && meta.value.models) || [])
+  const templates = computed(() => (meta.value && meta.value.templates) || [])
   const question = computed(() =>
     questionId.value ? { id: questionId.value, title: questionTitle.value } : null
   )
-  const streaming = computed(() => state.value === 'connecting' || state.value === 'streaming')
-  const quotaExhausted = computed(
-    () => Boolean(quota.value) && (quota.value.remaining ?? 1) <= 0
+  const masterKeyAutoGenerated = computed(() =>
+    Boolean(meta.value && meta.value.masterKeyAutoGenerated)
   )
 
   function reset() {
-    visible.value = false
+    if (controller) {
+      try {
+        controller.abort()
+      } catch {
+        // 流已结束时 abort 可能抛错，忽略
+      }
+    }
+    flushDisplay(displayMessage)
+    displayMessage = null
     messages.value = []
     state.value = 'idle'
+    notice.value = ''
+    conversationId.value = null
+    conversations.value = []
+    conversationTotal.value = 0
+    conversationPage.value = 1
+    activeModelConfigId.value = null
+    templateId.value = null
+    meta.value = null
+    quota.value = null
     questionId.value = null
     questionTitle.value = ''
-    quota.value = null
-    notice.value = ''
     sessionId.value = newSessionId()
     controller = null
     lastSentAt = 0
   }
 
-  function openPanel() {
-    visible.value = true
-    if (userStore.isLogin) loadQuota()
+  /** 进入对话页：拉元数据 + 额度 + 会话列表。 */
+  async function bootstrap() {
+    if (!userStore.isLogin) return
+    await Promise.all([loadMeta(), loadQuota(), loadConversations()])
   }
 
-  function closePanel() {
-    if (streaming.value) stop()
-    visible.value = false
+  async function loadMeta() {
+    try {
+      meta.value = await getChatMeta()
+      if (activeModelConfigId.value == null && meta.value) {
+        activeModelConfigId.value = meta.value.activeModelConfigId ?? null
+      }
+      // 讲解风格默认选中「默认讲解」：显式传 id 而不是靠 null 回退到 jar 内的
+      // prompt/system.txt，这样管理员在管理端改文案能立刻生效。
+      // 若该模板不存在（被删/停用），保持 null —— 后端 PromptBuilder 会回退到内置文本，
+      // 不会因为找不到模板而报错。
+      if (templateId.value == null && meta.value) {
+        const templates = meta.value.templates || []
+        const preferred = templates.find((tpl) => tpl.name === '默认讲解')
+        if (preferred) templateId.value = preferred.id
+      }
+    } catch {
+      // 元数据失败不阻塞对话；发送时后端仍会给 50201
+    }
   }
 
-  function togglePanel() {
-    if (visible.value) closePanel()
-    else openPanel()
+  async function loadQuota() {
+    try {
+      quota.value = await getQuota()
+    } catch {
+      // 额度条拿不到不阻塞对话
+    }
   }
 
-  /** 详情页「问助手」：带入题目 id + 标题（题干由服务端按 questionId 查库拼进 prompt）。 */
-  function openWithQuestion(id, title) {
-    if (id === undefined || id === null) return
-    questionId.value = String(id)
-    questionTitle.value = title || '当前题目'
-    openPanel()
+  async function loadConversations() {
+    try {
+      const page = await listConversations({ page: 1, size: CONVERSATION_PAGE_SIZE })
+      conversations.value = (page && page.list) || []
+      conversationTotal.value = (page && page.total) || 0
+      conversationPage.value = 1
+    } catch {
+      conversations.value = []
+    }
+  }
+
+  /** 切换会话：从服务端载入消息（D6：刷新/换设备都能恢复）。 */
+  async function openConversation(id) {
+    if (streaming.value) return false
+    try {
+      const detail = await getConversation(id)
+      flushDisplay(displayMessage)
+      displayMessage = null
+      conversationId.value = detail.id
+      questionId.value = detail.questionId ?? null
+      questionTitle.value = ''
+      activeModelConfigId.value = detail.modelConfigId ?? activeModelConfigId.value
+      messages.value = (detail.messages || []).map((msg) => ({
+        id: `s-${msg.id}`,
+        role: msg.role,
+        content: msg.content || '',
+        displayContent: msg.content || '',
+        status: msg.status === 1 ? 'done' : msg.status === 3 ? 'aborted' : 'failed',
+        statusNote: msg.statusNote || ''
+      }))
+      state.value = 'idle'
+      notice.value = ''
+      sessionId.value = newSessionId()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** 新建会话（D6）：本地清空，首条消息发出时才真正落库。 */
+  function startNewConversation() {
+    if (streaming.value) return false
+    flushDisplay(displayMessage)
+    displayMessage = null
+    conversations.value = []
+    conversationId.value = null
+    messages.value = []
+    state.value = 'idle'
+    notice.value = ''
+    sessionId.value = newSessionId()
+    loadConversations()
+    return true
+  }
+
+  async function removeConversation(id) {
+    try {
+      await deleteConversation(id)
+      if (conversationId.value === id) {
+        startNewConversation()
+      } else {
+        await loadConversations()
+      }
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function rename(id, title) {
+    try {
+      await renameConversation(id, title)
+      await loadConversations()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  async function ensureConversation() {
+    if (conversationId.value) return conversationId.value
+    try {
+      const id = await createConversation({
+        questionId: questionId.value,
+        modelConfigId: activeModelConfigId.value
+      })
+      conversationId.value = id
+      return id
+    } catch {
+      return null
+    }
+  }
+
+  /** 带入题目（详情页「问助手」跳转时用 query 传递）。 */
+  function setQuestion(id, title) {
+    questionId.value = id === undefined || id === null ? null : String(id)
+    questionTitle.value = title || (id ? '当前题目' : '')
   }
 
   function clearQuestion() {
@@ -103,12 +314,12 @@ export const useAssistantStore = defineStore('assistant', () => {
     questionTitle.value = ''
   }
 
-  async function loadQuota() {
-    try {
-      quota.value = await getQuota()
-    } catch {
-      // 额度条拿不到不阻塞对话；发送失败时后端仍会给 42901
-    }
+  function selectModel(configId) {
+    activeModelConfigId.value = configId
+  }
+
+  function selectTemplate(id) {
+    templateId.value = id
   }
 
   function applyQuota(payload) {
@@ -120,33 +331,31 @@ export const useAssistantStore = defineStore('assistant', () => {
       ...current,
       dailyLimit: limit,
       used,
-      remaining: Math.max(0, limit - used)
+      remaining: Math.max(0, limit - used),
+      unlimited: Boolean(payload.unlimited ?? current.unlimited ?? false),
+      consumesSiteQuota: payload.consumesSiteQuota ?? current.consumesSiteQuota,
+      resolvedFrom: payload.resolvedFrom ?? current.resolvedFrom
     }
   }
 
-  /** 05 §6.3：每次请求把 messages 裁到最近 10 条 / 6000 字符，当前用户消息必须保留。 */
-  function buildContext() {
-    const kept = messages.value
-      .filter(
-        (msg) =>
-          msg.role === 'user' || (msg.role === 'assistant' && msg.status === 'done' && msg.content)
-      )
-      .map((msg) => ({ role: msg.role, content: msg.content }))
-
-    let trimmed = kept.slice(Math.max(0, kept.length - MAX_MESSAGES))
-    const totalChars = () => trimmed.reduce((sum, msg) => sum + msg.content.length, 0)
-    while (trimmed.length > 1 && totalChars() > MAX_CHARS) {
-      trimmed = trimmed.slice(1)
-    }
-    return trimmed
-  }
-
-  /** 错误码 → 文案：与 04 B5.3 共用同一张表（request.js 导出），不再维护第二份。 */
+  /**
+   * 错误码 → 文案。
+   *
+   * v3.20 修复：**后端 message 优先**。原实现先查前端兜底表，把后端下发的精确文案
+   * （如「提问太快了，请 3 秒后再试」）覆盖成通用文案（「操作太频繁」）；
+   * 而 request.js 的拦截器已保证 error.message 至少有兜底值，所以这里只需兜最后一层。
+   */
   function messageForError(error) {
     if (!error) return '请求失败，请稍后重试'
-    return FALLBACK_MESSAGES[error.code] || error.message || '请求失败，请稍后重试'
+    if (error.message) return error.message
+    return FALLBACK_MESSAGES[error.code] || '请求失败，请稍后重试'
   }
 
+  /**
+   * 发送。D6/D9：
+   * - 只发本轮用户消息（历史由服务端按 conversationId 取）；
+   * - 流不随页面卸载中断，`controller` 由 store 持有。
+   */
   async function send(rawText, { bypassInterval = false } = {}) {
     notice.value = ''
     const text = String(rawText || '').trim()
@@ -164,12 +373,18 @@ export const useAssistantStore = defineStore('assistant', () => {
       notice.value = '今日额度已用完，明天 00:00 重置'
       return false
     }
+    if (!hasAnyUsableConfig.value) {
+      notice.value = '还没有可用的模型，请先去配置'
+      return false
+    }
 
+    flushDisplay(displayMessage)
     const userMessage = { id: nextId('u'), role: 'user', content: text, status: 'done' }
     const assistantMessage = reactive({
       id: nextId('a'),
       role: 'assistant',
       content: '',
+      displayContent: '',
       status: 'connecting'
     })
     messages.value.push(userMessage, assistantMessage)
@@ -179,7 +394,15 @@ export const useAssistantStore = defineStore('assistant', () => {
 
     let receivedMeta = false
     let receivedDone = false
-    const payload = { messages: buildContext(), questionId: questionId.value }
+    let codeFenceSeen = false
+
+    const payload = {
+      messages: [{ role: 'user', content: text }],
+      questionId: questionId.value,
+      modelConfigId: activeModelConfigId.value,
+      templateId: templateId.value,
+      conversationId: conversationId.value
+    }
 
     try {
       await streamChat({
@@ -199,29 +422,51 @@ export const useAssistantStore = defineStore('assistant', () => {
               assistantMessage.content += data.content
               assistantMessage.status = 'streaming'
               state.value = 'streaming'
+              pumpDisplay(assistantMessage)
+              if (!codeFenceSeen && assistantMessage.content.includes('```')) {
+                codeFenceSeen = true
+                preloadMarkdown()
+              }
             }
           } else if (name === 'done') {
             receivedDone = true
+            flushDisplay(assistantMessage)
             assistantMessage.status = 'done'
             state.value = 'done'
             if (data && data.quota) applyQuota(data.quota)
+            if (data && data.conversationId) {
+              const isFirst = conversationId.value == null
+              conversationId.value = data.conversationId
+              if (isFirst) loadConversations()
+            }
           } else if (name === 'error') {
             receivedMeta = true
+            flushDisplay(assistantMessage)
             assistantMessage.status = 'failed'
             state.value = 'failed'
+            assistantMessage.statusNote = '未完成'
             notice.value = messageForError(data)
           }
         }
       })
       if (!receivedDone && state.value === 'streaming') {
-        // 连接被上游结束但没有 done/error：保留已收文本，标「未完成」
+        flushDisplay(assistantMessage)
         assistantMessage.status = 'failed'
+        assistantMessage.statusNote = '未完成'
         state.value = 'failed'
         notice.value = '回答中断，请重试'
       }
     } catch (error) {
+      // 退出登录时 reset() 会 abort 当前流；此时不能再发额度/会话请求，
+      // 否则无 token 的 401 会把刚退出的用户又弹回登录页。
+      if (!userStore.isLogin) {
+        state.value = 'idle'
+        return false
+      }
       if (error && error.name === 'AbortError') {
+        flushDisplay(assistantMessage)
         assistantMessage.status = 'aborted'
+        assistantMessage.statusNote = '已停止生成'
         state.value = 'aborted'
         loadQuota()
         return true
@@ -236,11 +481,14 @@ export const useAssistantStore = defineStore('assistant', () => {
         }
         return false
       }
+      flushDisplay(assistantMessage)
       assistantMessage.status = 'failed'
+      assistantMessage.statusNote = '未完成'
       state.value = 'failed'
       notice.value = messageForError(error)
     } finally {
       controller = null
+      if (userStore.isLogin) loadConversations()
     }
     return true
   }
@@ -255,37 +503,56 @@ export const useAssistantStore = defineStore('assistant', () => {
     const lastUser = [...messages.value].reverse().find((msg) => msg.role === 'user')
     if (!lastUser) return
     const lastUserIndex = messages.value.lastIndexOf(lastUser)
-    messages.value = messages.value.slice(0, lastUserIndex + 1)
+    messages.value = messages.value.slice(0, lastUserIndex)
     lastSentAt = 0
     send(lastUser.content, { bypassInterval: true })
   }
 
-  watch(
-    () => userStore.isLogin,
-    (loggedIn) => {
-      if (!loggedIn) reset()
-    }
-  )
+  /** D9/A10：后台标签页 rAF 被暂停，回前台时把出字泵追平。 */
+  function flushPendingDisplay() {
+    if (displayMessage) flushDisplay(displayMessage)
+  }
 
   return {
-    visible,
     state,
     messages,
-    questionId,
-    question,
-    streaming,
-    quota,
     notice,
+    quota,
+    meta,
+    models,
+    templates,
+    conversations,
+    conversationId,
+    conversationTotal,
+    conversationPage,
+    activeModelConfigId,
+    templateId,
+    question,
+    questionId,
+    questionTitle,
+    streaming,
+    unlimited,
     quotaExhausted,
-    openPanel,
-    closePanel,
-    togglePanel,
-    openWithQuestion,
-    clearQuestion,
+    allowUserOwnKey,
+    hasAnyUsableConfig,
+    masterKeyAutoGenerated,
+    bootstrap,
+    loadMeta,
     loadQuota,
+    loadConversations,
+    openConversation,
+    startNewConversation,
+    removeConversation,
+    rename,
+    ensureConversation,
+    setQuestion,
+    clearQuestion,
+    selectModel,
+    selectTemplate,
     send,
     stop,
     regenerate,
-    reset
+    reset,
+    flushPendingDisplay
   }
 })

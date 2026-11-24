@@ -31,6 +31,17 @@ export const useUserStore = defineStore('user', () => {
   function reset() {
     setToken('')
     user.value = null
+    // assistant store 持有上一账号的消息/会话/模型选择，必须一起清；
+    // 用动态 import 避免 user ↔ assistant 的静态循环依赖。
+    import('@/stores/assistant')
+      .then(({ useAssistantStore }) => {
+        try {
+          useAssistantStore().reset()
+        } catch {
+          // Pinia 尚未初始化时忽略
+        }
+      })
+      .catch(() => {})
   }
 
   async function login(nickname, password) {
@@ -58,8 +69,17 @@ export const useUserStore = defineStore('user', () => {
     return data
   }
 
+  /**
+   * 合并式更新用户信息。
+   * v4.12 修正：原来是直接替换，只传 { avatar } 会把 nickname/role 一起冲掉，
+   * 导致头像更新后昵称变空、管理菜单消失。改为合并语义。
+   */
   function setProfile(profile) {
-    user.value = profile
+    if (!profile) {
+      user.value = null
+      return
+    }
+    user.value = user.value ? { ...user.value, ...profile } : { ...profile }
   }
 
   return {

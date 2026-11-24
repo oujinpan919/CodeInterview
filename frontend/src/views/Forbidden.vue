@@ -4,7 +4,7 @@
     <h1 class="status-page__title">无权限访问</h1>
     <p class="status-page__desc">抱歉，你没有权限访问该页面。</p>
     <div class="status-page__actions">
-      <el-button type="primary" @click="router.push('/')">回首页</el-button>
+      <el-button type="primary" @click="router.push('/home')">回首页</el-button>
       <el-button @click="handleSwitchAccount">切换账号</el-button>
     </div>
   </section>
@@ -31,7 +31,12 @@ async function handleSwitchAccount() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - var(--header-height) - 160px);
+  /*
+   * v4.11：原来是 calc(100vh - header - 160px)，160px 是按旧的单行页脚估的。
+   * 页脚改多栏后高度随断点变化，写死的估算会把页脚挤出首屏；
+   * 这里改为相对视口的比例，不再依赖页脚实际高度。
+   */
+  min-height: 60dvh;
   padding: var(--space-10) var(--space-4);
   text-align: center;
 }

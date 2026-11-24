@@ -18,6 +18,7 @@ import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.codeinterview.ai.AiProperties;
@@ -37,6 +38,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * #11 同账号并发、#12 3s 间隔、#15 线程池拒绝。
  */
 @Timeout(120)
+@ActiveProfiles({"mock", "test"})
 class ChatGateTest extends ChatTestSupport {
 
     @Test
@@ -114,7 +116,10 @@ class ChatGateTest extends ChatTestSupport {
             assertThat(first.status()).isEqualTo(200);
             HttpResult second = chatFail(user.token(), chatBody("second", null));
             assertThat(second.status()).isEqualTo(429);
-            assertThat(objectMapper.readTree(second.body()).path("code").asInt()).isEqualTo(42901);
+            // v3.20 修复：账号已有流在跑是「稍等」而非「额度用尽」，应为 42900
+            JsonNode body = objectMapper.readTree(second.body());
+            assertThat(body.path("code").asInt()).isEqualTo(42900);
+            assertThat(body.path("message").asText()).contains("还在生成中");
             assertThat(userUsedCount(user.id())).isEqualTo(1);
             assertThat(readAll(first)).contains("event:done");
         }
@@ -152,13 +157,17 @@ class ChatGateTest extends ChatTestSupport {
     }
 
     @Test
-    void secondRequestWithin3sReturns42901WithoutConsumingQuota() throws Exception {
+    void secondRequestWithin3sReturnsRateLimitedNotQuotaExhausted() throws Exception {
         TestUser user = createUser("gate12");
         try (SseStream first = openChat(user.token(), chatBody("first", null))) {
             assertThat(first.status()).isEqualTo(200);
             HttpResult second = chatFail(user.token(), chatBody("second", null));
             assertThat(second.status()).isEqualTo(429);
-            assertThat(objectMapper.readTree(second.body()).path("code").asInt()).isEqualTo(42901);
+            // v3.20 修复：3s 间隔未到是「提问太快」而非「额度用尽」，应为 42900 且给出秒数
+            JsonNode body = objectMapper.readTree(second.body());
+            assertThat(body.path("code").asInt()).isEqualTo(42900);
+            assertThat(body.path("message").asText()).contains("秒后再试");
+            assertThat(body.path("message").asText()).doesNotContain("明天");
             assertThat(userUsedCount(user.id())).isEqualTo(1);
             assertThat(readAll(first)).contains("event:done");
         }
@@ -183,9 +192,11 @@ class ChatGateTest extends ChatTestSupport {
         props.setApiKey("mock");
         ChatService service = new ChatService(validator, mock(PromptBuilder.class), mock(LlmStreamClient.class),
                 mock(UpstreamSseParser.class), mock(UpstreamCodeMapper.class), quotaService, rateGate, registry,
-                mock(AiChatLogService.class), props, executor);
+                mock(AiChatLogService.class), props, executor,
+                stubResolver(props), mock(com.codeinterview.ai.service.CredentialService.class),
+                mock(com.codeinterview.ai.service.ConversationService.class));
 
-        assertThatThrownBy(() -> service.chat(1L, new ChatReq()))
+        assertThatThrownBy(() -> service.chat(1L, new ChatReq(), false))
                 .isInstanceOfSatisfying(BusinessException.class,
                         ex -> assertThat(ex.getResultCode()).isEqualTo(ResultCode.AI_SITE_LIMIT));
         verify(quotaService).rollbackSite(any());
@@ -218,5 +229,18 @@ class ChatGateTest extends ChatTestSupport {
         msg.setRole("user");
         msg.setContent("hi");
         return msg;
+    }
+
+    /** 解析链 stub：返回 GLOBAL_FALLBACK（与旧行为一致，消耗站点配额）。 */
+    private com.codeinterview.ai.config.ModelConfigResolver stubResolver(AiProperties props) {
+        com.codeinterview.ai.config.ModelConfigResolver resolver =
+                mock(com.codeinterview.ai.config.ModelConfigResolver.class);
+        when(resolver.resolve(anyLong(), any())).thenReturn(
+                new com.codeinterview.ai.config.ModelConfigResolver.Resolved(
+                        0L,
+                        com.codeinterview.ai.config.ModelConfigResolver.ResolvedFrom.GLOBAL_FALLBACK,
+                        "mock", "全局兜底", props.getBaseUrl(), "mock-ok", null,
+                        props.getTemperature(), props.getMaxTokens(), false, null, null));
+        return resolver;
     }
 }

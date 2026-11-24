@@ -1,3 +1,5 @@
+# 复制为 backend/config/application-local.yml 后填入真实值。
+# 该文件已被 .gitignore 忽略，禁止提交（scripts/check.sh 规则 9 会校验）。
 spring:
   datasource:
     username: codeinterview
@@ -6,3 +8,25 @@ admin:
   init-password:
 ai:
   api-key:
+app:
+  encrypt:
+    key:
+  # v4.12 图片对象存储（阿里云 OSS）。
+  # enabled=false 或留空凭证时，上传接口返回 50203，站点其余功能正常，
+  # 头像自动回退首字母色块、Markdown 图片不显示 —— 本地开发可以先不配。
+  #
+  # 凭证建议用 RAM 子账号，权限只给 oss:PutObject / oss:DeleteObject，
+  # 资源限定为 acs:oss:*:*:<bucket>/<prefix>/*，不要用主账号 AK。
+  storage:
+    enabled: true
+    endpoint: oss-cn-shenzhen.aliyuncs.com
+    bucket: codeinterview
+    access-key-id:
+    access-key-secret:
+    # 对象键前缀，生产可按环境分目录（如 codeinterview/images/prod）
+    prefix: codeinterview/images
+    # 挂了 CDN 或自定义域名时填这里；留空则按 https://{bucket}.{endpoint} 拼
+    public-base-url: ""
+    # 单文件上限（字节），需与 application.yml 的 spring.servlet.multipart.max-file-size 对齐
+    max-bytes: 5242880
+    date-path: true

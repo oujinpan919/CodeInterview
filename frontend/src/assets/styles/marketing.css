@@ -1,0 +1,239 @@
+/* ============================================================================
+   营销页共享视觉层
+   - 只在 Landing 页面加载，所有类名以 mk- 前缀，避免污染应用内页面
+   - 参考「智囊团」落地页的节奏：大字号、分区标签、留白、卡片与 CTA
+   ============================================================================ */
+
+.mk-root {
+  --mk-blue: #2563eb;
+  --mk-blue-strong: #1d4ed8;
+  --mk-blue-soft: #eef4ff;
+  --mk-indigo: #4f46e5;
+  --mk-ink: #0b1220;
+  --mk-text: #374151;
+  --mk-muted: #6b7280;
+  --mk-faint: #9ca3af;
+  --mk-line: #e8ebf2;
+  --mk-line-strong: #d9dee8;
+  --mk-soft: #f7f9ff;
+  --mk-container: 1200px;
+  --mk-gradient: linear-gradient(135deg, #4b8bff 0%, #2563eb 55%, #4f46e5 100%);
+  --mk-shadow: 0 20px 50px -32px rgb(16 24 40 / 30%);
+  --mk-shadow-soft: 0 14px 34px -26px rgb(16 24 40 / 24%);
+  color: var(--mk-ink);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.mk-container {
+  width: 100%;
+  max-width: var(--mk-container);
+  padding: 0 32px;
+  margin: 0 auto;
+}
+
+.mk-btn {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.mk-btn--primary {
+  color: #fff;
+  background-color: var(--mk-blue);
+  background-image: var(--mk-gradient);
+  box-shadow: 0 12px 24px -14px rgb(37 99 235 / 70%);
+}
+
+.mk-btn--primary:hover {
+  color: #fff;
+  box-shadow: 0 16px 30px -14px rgb(37 99 235 / 75%);
+  transform: translateY(-1px);
+}
+
+.mk-btn--ghost {
+  color: var(--mk-ink);
+  background-color: #fff;
+  border-color: var(--mk-line-strong);
+}
+
+.mk-btn--ghost:hover {
+  color: var(--mk-blue);
+  border-color: rgb(37 99 235 / 30%);
+  box-shadow: 0 10px 24px -20px rgb(16 24 40 / 24%);
+}
+
+.mk-btn--sm {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 13.5px;
+  border-radius: 9px;
+}
+
+.mk-btn--lg {
+  height: 48px;
+  padding: 0 24px;
+  font-size: 14.5px;
+  border-radius: 12px;
+}
+
+.mk-btn:focus-visible {
+  outline: 2px solid rgb(37 99 235 / 55%);
+  outline-offset: 3px;
+}
+
+.mk-eyebrow {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin: 0;
+  color: var(--mk-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.12em;
+}
+
+.mk-eyebrow--center {
+  justify-content: center;
+}
+
+.mk-eyebrow__dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--mk-blue);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgb(37 99 235 / 10%);
+}
+
+.mk-eyebrow__line {
+  width: 22px;
+  height: 1.5px;
+  background: linear-gradient(90deg, var(--mk-blue), transparent);
+}
+
+.mk-section-head {
+  max-width: 720px;
+  margin-bottom: 48px;
+}
+
+.mk-section-head--center {
+  margin-right: auto;
+  margin-left: auto;
+  text-align: center;
+}
+
+.mk-section-head--center .mk-section-sub {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.mk-h2 {
+  margin: 14px 0 0;
+  color: var(--mk-ink);
+  font-size: clamp(30px, 3.2vw, 42px);
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.035em;
+}
+
+.mk-section-sub {
+  max-width: 600px;
+  margin: 14px 0 0;
+  color: var(--mk-muted);
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.mk-textlink {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--mk-blue);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-decoration: none;
+  transition: color 0.18s ease;
+}
+
+.mk-textlink:hover {
+  color: var(--mk-blue-strong);
+}
+
+.mk-textlink svg {
+  transition: transform 0.18s ease;
+}
+
+.mk-textlink:hover svg {
+  transform: translateX(2px);
+}
+
+.mk-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mk-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* 只在 Landing 挂载期间开启锚点平滑滚动，离开页面立刻移除 */
+html.mk-smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+@media (max-width: 767px) {
+  .mk-container {
+    padding: 0 20px;
+  }
+
+  .mk-section-head {
+    margin-bottom: 32px;
+  }
+
+  .mk-section-sub {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.mk-smooth-scroll {
+    scroll-behavior: auto;
+  }
+
+  .mk-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .mk-btn,
+  .mk-textlink,
+  .mk-textlink svg {
+    transition: none;
+  }
+}

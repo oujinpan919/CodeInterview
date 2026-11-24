@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -117,6 +118,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Void> handleClientAborted(Exception ex) {
         log.debug("[{}] response write aborted by client: {}", currentTraceId(), ex.getMessage());
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * v4.12 上传文件超过 spring.servlet.multipart.max-file-size。
+     * 这个异常在进入 Controller 之前就由 MultipartResolver 抛出，
+     * StorageService 里的大小校验根本没机会执行，所以必须单独处理——
+     * 否则会落到兜底的 Exception 分支，给用户一个无信息的「服务异常」（50000）。
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Result<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("[{}] upload too large: {}", currentTraceId(), ex.getMessage());
+        return build(ResultCode.PARAM_ERROR, "图片过大，请压缩后重试（单张上限 5MB）");
     }
 
     @ExceptionHandler(Exception.class)

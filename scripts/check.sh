@@ -39,7 +39,11 @@ echo "repo: $ROOT"
 echo
 
 # 1) id 不得转数字（02 §8）
-OUT="$(hits 'Number\(|parseInt\(|parseFloat\(' frontend/src)"
+#    只针对 id 标识符：`.anyId` 形式的属性访问，或独立单词 id/Id/ID。
+#    V1 起 Long 全量序列化为 String（JacksonConfig），计数/难度字段（totalCount、
+#    completedCount、completedSessionCount、difficulty、count）必须 Number() 才能运算，
+#    这些不是 id，不应命中本规则。
+OUT="$(hits '(Number|parseInt|parseFloat)\([^)]*(\.\s*[A-Za-z]*[Ii][Dd]\b|\b[Ii][Dd]\b)' frontend/src)"
 if [[ -n "$OUT" ]]; then fail "id 不得转数字（Number(/parseInt(）" "$OUT"; else pass "id 不得转数字（Number(/parseInt(）"; fi
 
 # 2) v-html 只允许 MarkdownView 唯一一处（只数真正的属性用法，不含注释）
@@ -69,9 +73,12 @@ OUT="$(hits "localStorage\.setItem\(['\"]ci_token" frontend/src)"
 if [[ -n "$OUT" ]]; then fail "token 禁止写 localStorage（应为 sessionStorage）" "$OUT"; else pass "token 禁止写 localStorage（应为 sessionStorage）"; fi
 
 # 7) 密钥泄露扫描（sk-/ak-，讯飞是 ak- 前缀）
+#    application-local.yml 是 .gitignore 忽略的本机真实密钥文件（不入库，规则 9 已校验），
+#    按脚本头注释「只扫源码与仓库跟踪文件」的意图排除之。
 OUT="$(hits '(sk|ak)-[A-Za-z0-9]{16,}' \
   --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist \
-  --exclude-dir=target --exclude-dir=backups --exclude-dir=logs .)"
+  --exclude-dir=target --exclude-dir=backups --exclude-dir=logs \
+  --exclude=application-local.yml .)"
 if [[ -n "$OUT" ]]; then fail "仓库内不得出现疑似 API Key" "$OUT"; else pass "仓库内不得出现疑似 API Key（sk-/ak-）"; fi
 
 # 8) 后端禁用组件（02 §8）

@@ -84,19 +84,63 @@
             />
           </el-form-item>
 
-          <el-form-item label="题干（支持 Markdown）" prop="contentMd">
+          <el-form-item prop="contentMd">
+            <template #label>
+              <span class="question-form__label-row">
+                题干（支持 Markdown）
+                <ImageUploader
+                  folder="question"
+                  aria-label="在题干中插入图片"
+                  @uploaded="(result) => insertImage('contentMd', result)"
+                >
+                  <template #default="{ uploading }">
+                    <el-button
+                      class="question-form__insert-image"
+                      size="small"
+                      :loading="uploading"
+                      text
+                      type="primary"
+                    >
+                      {{ uploading ? '上传中…' : '插入图片' }}
+                    </el-button>
+                  </template>
+                </ImageUploader>
+              </span>
+            </template>
             <el-input
               :model-value="form.contentMd"
               type="textarea"
               :autosize="{ minRows: 18, maxRows: 30 }"
               maxlength="20000"
               show-word-limit
-              placeholder="题干 Markdown，可含代码块"
+              placeholder="题干 Markdown，可含代码块与图片"
               @update:model-value="patch('contentMd', $event)"
             />
           </el-form-item>
 
-          <el-form-item label="参考答案" prop="answerMd">
+          <el-form-item prop="answerMd">
+            <template #label>
+              <span class="question-form__label-row">
+                参考答案
+                <ImageUploader
+                  folder="question"
+                  aria-label="在参考答案中插入图片"
+                  @uploaded="(result) => insertImage('answerMd', result)"
+                >
+                  <template #default="{ uploading }">
+                    <el-button
+                      class="question-form__insert-image"
+                      size="small"
+                      :loading="uploading"
+                      text
+                      type="primary"
+                    >
+                      {{ uploading ? '上传中…' : '插入图片' }}
+                    </el-button>
+                  </template>
+                </ImageUploader>
+              </span>
+            </template>
             <el-input
               :model-value="form.answerMd"
               type="textarea"
@@ -149,7 +193,9 @@
 import { computed, ref, watch } from 'vue'
 import { useMediaQuery } from '@vueuse/core'
 import { useDebounceFn } from '@vueuse/core'
+import { ElMessage } from 'element-plus'
 import MarkdownView from '@/components/MarkdownView.vue'
+import ImageUploader from '@/components/ImageUploader.vue'
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -226,6 +272,23 @@ function patch(key, value) {
   emit('update:modelValue', { ...draft.value })
 }
 
+/**
+ * v4.12 把上传成功的图片以 Markdown 语法追加到指定字段末尾。
+ *
+ * 为什么追加到末尾而不是插入光标处：textarea 没有受控光标位置，
+ * 硬插需要读写 DOM selection，在 v-model 受控 + 防抖预览下很容易错位。
+ * 追加到末尾是可预期的，用户自己剪切到想要的位置即可。
+ */
+function insertImage(field, result) {
+  if (!result || !result.url) return
+  const current = form.value[field] || ''
+  const snippet = `![图片](${result.url})`
+  // 前后补空行，避免图片粘在上一段文字或代码围栏边界上导致 Markdown 解析异常
+  const next = current.trim() ? `${current.replace(/\s+$/, '')}\n\n${snippet}\n` : `${snippet}\n`
+  patch(field, next)
+  ElMessage.success('图片已插入到末尾')
+}
+
 function toPayload() {
   return {
     title: (form.value.title || '').trim(),
@@ -288,6 +351,20 @@ async function handleSave(publish) {
 
 .question-form__select {
   width: 100%;
+}
+
+/* v4.12：表单 label 右侧放「插入图片」，用 flex 让按钮贴着文字基线，不额外占一行高度 */
+.question-form__label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.question-form__insert-image {
+  height: auto;
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-aux);
+  font-weight: 400;
 }
 
 .question-form__preview {

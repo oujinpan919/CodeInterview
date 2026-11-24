@@ -36,7 +36,7 @@ import org.springframework.test.context.ActiveProfiles;
  * 实际用 {@link ActiveProfiles}（已登记 02 §10）。
  */
 @SpringBootTest
-@ActiveProfiles("mock")
+@ActiveProfiles({"mock", "test"})
 class MockUpstreamServerTest {
 
     @Autowired
@@ -126,7 +126,8 @@ class MockUpstreamServerTest {
     void mock429FailsFastWithoutRetry() {
         aiProperties.setModel("mock-429");
 
-        assertThatThrownBy(() -> llmStreamClient.open(List.of(new UpstreamMsg("user", "hi"))))
+        assertThatThrownBy(() -> llmStreamClient.open(List.of(new UpstreamMsg("user", "hi")),
+                resolved("mock-429"), aiProperties.getApiKey()))
                 .isInstanceOfSatisfying(LlmStreamClient.UpstreamHttpException.class,
                         ex -> assertThat(ex.getStatus()).isEqualTo(429));
         assertThat(mockServer.hits("mock-429")).isEqualTo(1);
@@ -167,7 +168,7 @@ class MockUpstreamServerTest {
         List<UpstreamSseParser.ParseResult> results = new ArrayList<>();
         InputStream stream = llmStreamClient.open(List.of(
                 new UpstreamMsg("system", "system prompt"),
-                new UpstreamMsg("user", "HashMap 的扩容机制？")));
+                new UpstreamMsg("user", "HashMap 的扩容机制？")), resolved(model), aiProperties.getApiKey());
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -182,6 +183,23 @@ class MockUpstreamServerTest {
             }
         }
         return results;
+    }
+
+    /** 用全局 ai.* 组装一份「全局兜底」解析结果（v3.20 起 open() 需要显式配置）。 */
+    private com.codeinterview.ai.config.ModelConfigResolver.Resolved resolved(String model) {
+        return new com.codeinterview.ai.config.ModelConfigResolver.Resolved(
+                0L,
+                com.codeinterview.ai.config.ModelConfigResolver.ResolvedFrom.GLOBAL_FALLBACK,
+                aiProperties.getProvider(),
+                "全局兜底",
+                aiProperties.getBaseUrl(),
+                model,
+                null,
+                aiProperties.getTemperature(),
+                aiProperties.getMaxTokens(),
+                aiProperties.isThinkingEnabled(),
+                null,
+                null);
     }
 
     private int freePort() {

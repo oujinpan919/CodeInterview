@@ -7,6 +7,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.codeinterview.support.ChatTestSupport;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -15,6 +16,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * T15 / 05 §12：#2 正常流式、#6 中途断流、#7 客户端停止、#9 注入 system、#10 questionId 未发布。
  */
 @Timeout(120)
+@ActiveProfiles({"mock", "test"})
 class ChatStreamTest extends ChatTestSupport {
 
     @Test

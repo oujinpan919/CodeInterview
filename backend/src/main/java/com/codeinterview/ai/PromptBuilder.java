@@ -10,6 +10,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
 
+import com.codeinterview.ai.service.PromptTemplateService;
 import com.codeinterview.chat.dto.Msg;
 import com.codeinterview.common.exception.BusinessException;
 import com.codeinterview.common.result.ResultCode;
@@ -21,8 +22,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 组装上游 messages（05 §13）：
- * system（固定 system prompt）→ 可选题干上下文（只从库里读，绝不信任请求体）→ 客户端历史消息。
+ * 组装上游 messages（05 §13 / 08 §5）：
+ * system（模板或固定 system prompt）→ 可选题干上下文（只从库里读，绝不信任请求体）→ 历史消息。
+ *
+ * <p>D11：{@code templateId} 只能选模板，正文由服务端查库，客户端传不了 system 正文。
  *
  * <p>上下文预算：题干前 2000 字、答案前 1200 字、拼接后 system 总长 ≤ 4000；
  * 超出时先截答案、再截题干。
@@ -46,6 +49,7 @@ public class PromptBuilder {
     private final AiProperties props;
     private final QuestionMapper questionMapper;
     private final ResourceLoader resourceLoader;
+    private final PromptTemplateService promptTemplateService;
 
     private volatile String systemPrompt;
 
@@ -54,8 +58,11 @@ public class PromptBuilder {
         this.systemPrompt = loadSystemPrompt();
     }
 
-    public List<UpstreamMsg> build(Long questionId, List<Msg> clientMsgs) {
-        String system = systemPrompt();
+    /**
+     * @param templateId 可选的 Prompt 模板 id（D11）；为空则用默认 system prompt
+     */
+    public List<UpstreamMsg> build(Long questionId, Long templateId, List<Msg> clientMsgs) {
+        String system = resolveSystem(templateId);
         if (questionId != null) {
             QuestionDetail question = questionMapper.selectPublishedDetail(questionId);
             if (question == null) {
@@ -73,6 +80,18 @@ public class PromptBuilder {
             }
         }
         return messages;
+    }
+
+    /** 优先用模板正文；模板不存在/已停用时回退默认文本。 */
+    private String resolveSystem(Long templateId) {
+        if (templateId != null) {
+            String content = promptTemplateService.content(templateId);
+            if (content != null && !content.isBlank()) {
+                return content.trim();
+            }
+            log.debug("[ai] prompt template {} not found or disabled, fallback to default", templateId);
+        }
+        return systemPrompt();
     }
 
     /** 题目上下文拼接格式逐字按 05 §13；只读 content_md / answer_md，不使用请求体文本。 */

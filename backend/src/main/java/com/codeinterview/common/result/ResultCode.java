@@ -22,7 +22,11 @@ public enum ResultCode {
     SERVER_ERROR(50000, 500, "服务异常，请稍后重试"),
     THIRD_PARTY_ERROR(50200, 502, "第三方服务调用失败"),
     AI_UNAVAILABLE(50201, 502, "AI 服务暂不可用"),
-    AI_TIMEOUT(50202, 504, "AI 响应超时，请重试");
+    AI_TIMEOUT(50202, 504, "AI 响应超时，请重试"),
+    STORAGE_DISABLED(50203, 502, "图片上传未启用"),
+    STORAGE_ERROR(50204, 502, "图片存储服务不可用，请稍后重试"),
+    AI_CONFIG_LIMIT(40902, 409, "启用的模型数量已达上限"),
+    AI_CONFIG_DISABLED(40302, 403, "管理员已关闭用户自带凭证功能");
 
     private final int code;
     private final int httpStatus;

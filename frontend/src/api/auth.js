@@ -25,3 +25,11 @@ export function updateProfile(data) {
 export function updatePassword(data) {
   return request.put('/auth/password', data)
 }
+
+/**
+ * v4.12 设置头像。传空字符串表示清除（回退首字母色块）。
+ * 与改名/改密不同，这个接口不会踢下线，返回更新后的用户信息。
+ */
+export function updateAvatar(avatar) {
+  return request.put('/auth/avatar', { avatar })
+}

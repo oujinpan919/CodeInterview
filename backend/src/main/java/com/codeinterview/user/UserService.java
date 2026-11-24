@@ -62,6 +62,14 @@ public class UserService {
         userMapper.updateById(update);
     }
 
+    /** v4.12 更新头像 URL；传 null 表示清除（回退首字母色块）。 */
+    public void updateAvatar(Long userId, String avatarUrl) {
+        User update = new User();
+        update.setId(userId);
+        update.setAvatar(avatarUrl);
+        userMapper.updateById(update);
+    }
+
     public long countAdmins() {
         return userMapper.countAdmins();
     }
@@ -71,6 +79,7 @@ public class UserService {
             return null;
         }
         return new UserResp(user.getId() == null ? null : String.valueOf(user.getId()),
-                user.getNickname(), user.getRole());
+                user.getNickname(), user.getAvatar(), user.getRole(),
+                user.getCreatedAt(), user.getLastLoginAt());
     }
 }

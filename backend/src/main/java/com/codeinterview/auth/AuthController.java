@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.codeinterview.auth.dto.AvatarUpdateReq;
 import com.codeinterview.auth.dto.LoginReq;
 import com.codeinterview.auth.dto.PasswordUpdateReq;
 import com.codeinterview.auth.dto.ProfileUpdateReq;
@@ -67,5 +68,15 @@ public class AuthController {
     public Result<Void> password(@RequestBody @Valid PasswordUpdateReq req) {
         authService.updatePassword(req);
         return Result.success();
+    }
+
+    /**
+     * v4.12 设置/清除头像。传空字符串表示清除，回退到首字母色块。
+     * 与改名/改密不同，本接口不踢下线，直接返回更新后的用户信息。
+     */
+    @Operation(summary = "设置头像（空字符串=清除）")
+    @PutMapping("/avatar")
+    public Result<UserResp> avatar(@RequestBody @Valid AvatarUpdateReq req) {
+        return Result.success(authService.updateAvatar(req.getAvatar()));
     }
 }

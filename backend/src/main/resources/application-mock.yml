@@ -6,3 +6,5 @@ ai:
   base-url: http://127.0.0.1:18080
   model: mock-ok
   api-key: mock
+  # mock 上游监听 127.0.0.1，必须放开私有网段校验（生产保持 false）
+  allow-private-network: true

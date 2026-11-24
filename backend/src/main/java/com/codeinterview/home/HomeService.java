@@ -12,6 +12,8 @@ import com.codeinterview.question.QuestionMapper;
 import com.codeinterview.question.vo.QuestionBriefResp;
 import com.codeinterview.question.vo.QuestionTagRow;
 import com.codeinterview.question.vo.TagBriefResp;
+import com.codeinterview.review.ReviewService;
+import com.codeinterview.review.vo.ReviewSummaryResp;
 import com.codeinterview.taxonomy.CategoryService;
 import com.codeinterview.taxonomy.vo.CategoryResp;
 
@@ -30,6 +32,7 @@ public class HomeService {
     private final CategoryService categoryService;
     private final HomeMapper homeMapper;
     private final QuestionMapper questionMapper;
+    private final ReviewService reviewService;
 
     /**
      * 三块数据分别查询、分别降级：任一模块失败只让该字段为空并打 ERROR，不整体 500（01 F08）。
@@ -40,7 +43,22 @@ public class HomeService {
         resp.setLatest(loadLatest());
         resp.setHot(loadHot());
         resp.setContinueLearning(loadContinueLearning());
+        resp.setTodayPlan(loadTodayPlan());
         return resp;
+    }
+
+    /** 今日计划（v3.6 / 01 F-009）：仅登录返回；失败返回 null，由前端隐藏该卡而不是整页报错。 */
+    private ReviewSummaryResp loadTodayPlan() {
+        Long userId = currentUserIdOrNull();
+        if (userId == null) {
+            return null;
+        }
+        try {
+            return reviewService.summary(userId);
+        } catch (Exception ex) {
+            log.error("home todayPlan query failed", ex);
+            return null;
+        }
     }
 
     private List<HomeResp.HomeCategory> loadCategories() {

@@ -51,4 +51,22 @@
     ORDER BY count DESC
   </select>
 
+  <select id="selectDifficultyStats" resultType="com.codeinterview.stats.vo.DifficultyStatResp">
+    SELECT q.difficulty AS difficulty, COUNT(*) AS count,
+           ROUND(SUM(pr.self_assess = 1) / COUNT(*), 4) AS mastered_rate
+    FROM practice_record pr JOIN question q ON q.id = pr.question_id
+    WHERE pr.user_id = #{userId}
+    GROUP BY q.difficulty ORDER BY q.difficulty ASC
+  </select>
+
+  <select id="countCompletedSessions" resultType="long">
+    SELECT COUNT(*) FROM practice_session
+    WHERE user_id = #{userId} AND status IN (2, 4)
+  </select>
+
+  <!-- v3.6 修2：覆盖率分母，与题库列表同口径（status=1 AND deleted=0） -->
+  <select id="countPublishedQuestions" resultType="long">
+    SELECT COUNT(*) FROM question WHERE status = 1 AND deleted = 0
+  </select>
+
 </mapper>

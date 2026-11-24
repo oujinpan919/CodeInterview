@@ -19,11 +19,42 @@
     </if>
     <if test="query.keyword != null and query.keyword != ''">
       AND (q.title LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\'
+           <if test="query.searchBody != null and query.searchBody">
+             OR q.content_md LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\'
+             OR q.answer_md  LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\'
+           </if>
            OR EXISTS (SELECT 1 FROM question_tag qt2
                       JOIN tag t ON t.id = qt2.tag_id
                       WHERE qt2.question_id = q.id
                         AND t.name LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\'))
     </if>
+  </sql>
+
+  <!-- v3.15 相关性权重：标题 4 / 标签 3 / 题干 2 / 答案 1，可叠加（同一题多处命中得分更高）。
+       仅在带 keyword 时被 include；keyword 为空时 CASE 恒 false，不会误伤。 -->
+  <sql id="relevanceExpr">
+    (CASE WHEN q.title LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\' THEN 4 ELSE 0 END
+     + CASE WHEN EXISTS (SELECT 1 FROM question_tag qt3
+                         JOIN tag t3 ON t3.id = qt3.tag_id
+                         WHERE qt3.question_id = q.id
+                           AND t3.name LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\')
+            THEN 3 ELSE 0 END
+     + CASE WHEN q.content_md LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\' THEN 2 ELSE 0 END
+     + CASE WHEN q.answer_md  LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\' THEN 1 ELSE 0 END)
+  </sql>
+
+  <!-- v3.15 命中位置标记：title / tag / body（body = 题干或答案正文），前端展示「命中：标题/答案」 -->
+  <sql id="matchFieldsExpr">
+    CONCAT_WS(',',
+      CASE WHEN q.title LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\' THEN 'title' END,
+      CASE WHEN EXISTS (SELECT 1 FROM question_tag qt4
+                        JOIN tag t4 ON t4.id = qt4.tag_id
+                        WHERE qt4.question_id = q.id
+                          AND t4.name LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\')
+           THEN 'tag' END,
+      CASE WHEN (q.content_md LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\'
+                 OR q.answer_md LIKE CONCAT('%', #{query.keyword}, '%') ESCAPE '\\')
+           THEN 'body' END)
   </sql>
 
   <select id="countQuestionPage" resultType="long">
@@ -35,19 +66,64 @@
 
   <select id="selectQuestionPage" resultType="com.codeinterview.question.vo.QuestionBriefResp">
     SELECT q.id, q.title, q.category_id, c.name AS category_name,
-           q.difficulty, q.view_count, q.practice_count, q.published_at
+           q.difficulty, q.view_count, q.practice_count, q.published_at,
+           EXISTS (SELECT 1 FROM user_favorite f
+                   WHERE f.user_id = #{userId} AND f.question_id = q.id) AS favorite,
+           <!-- v4.1：已读标记。
+                未登录时必须返回 NULL 而不是 0 —— 前端用 visited===false 判「未访问」并涂蓝，
+                如果给游客返回 false，整个列表会全变蓝色，等于把配色语义反过来。 -->
+           <choose>
+             <when test="userId != null">
+               EXISTS (SELECT 1 FROM question_view v
+                       WHERE v.user_id = #{userId} AND v.question_id = q.id) AS visited
+             </when>
+             <otherwise>
+               NULL AS visited
+             </otherwise>
+           </choose>
+           <if test="query.keyword != null and query.keyword != ''">
+             , <include refid="relevanceExpr"/> AS relevance
+             , <include refid="matchFieldsExpr"/> AS matchFields
+           </if>
     FROM question q
     JOIN category c ON c.id = q.category_id
     <include refid="questionFilter"/>
+    <!-- v3.15：带关键词时按相关性优先，再按用户选择的排序做次级排序 -->
     <choose>
+      <when test="query.keyword != null and query.keyword != ''">
+        ORDER BY relevance DESC,
+        <choose>
+          <when test="query.sort == 'hot'">q.practice_count DESC, q.id DESC</when>
+          <when test="query.sort == 'difficulty'">q.difficulty ASC, q.id ASC</when>
+          <otherwise>q.published_at DESC, q.id DESC</otherwise>
+        </choose>
+      </when>
       <when test="query.sort == 'hot'">
         ORDER BY q.practice_count DESC, q.id DESC
+      </when>
+      <when test="query.sort == 'difficulty'">
+        ORDER BY q.difficulty ASC, q.id ASC
       </when>
       <otherwise>
         ORDER BY q.published_at DESC, q.id DESC
       </otherwise>
     </choose>
     LIMIT #{offset}, #{size}
+  </select>
+
+  <select id="selectRandomIds" resultType="java.lang.Long">
+    SELECT q.id
+    FROM question q
+    JOIN category c ON c.id = q.category_id
+    <include refid="questionFilter"/>
+    <if test="excludeIds != null and excludeIds.size() > 0">
+      AND q.id NOT IN
+      <foreach collection="excludeIds" item="eid" open="(" separator="," close=")">
+        #{eid}
+      </foreach>
+    </if>
+    ORDER BY RAND()
+    LIMIT #{size}
   </select>
 
   <select id="selectTagsByQuestionIds" resultType="com.codeinterview.question.vo.QuestionTagRow">
@@ -94,8 +170,105 @@
     LIMIT 1
   </select>
 
-  <select id="selectFavoriteFlag" resultType="java.lang.Integer">
-    SELECT 1
+  <!-- ==========================================================
+       v3.6 修1：按来源列表上下文取「上一题 / 下一题」
+       三处共用同一套路：WITH ordered 计算该列表的完整序号，
+       再按当前题目的 rn ± 1 取相邻；当前题不在该列表时 rn 为 NULL → prev/next 均为 NULL。
+       只建窗口不建表，721 题规模下是毫秒级。
+       ========================================================== -->
+
+  <!-- A. 题库列表：与 selectQuestionPage 完全同源（同筛选 + 同排序） -->
+  <select id="selectListNeighborIds" resultType="com.codeinterview.question.vo.NeighborIds">
+    WITH ordered AS (
+      SELECT q.id AS id,
+             ROW_NUMBER() OVER (
+               <choose>
+                 <!-- v3.15：带关键词时与列表同源 —— 先相关性、再用户排序 -->
+                 <when test="query.keyword != null and query.keyword != ''">
+                   ORDER BY <include refid="relevanceExpr"/> DESC,
+                   <choose>
+                     <when test="query.sort == 'hot'">q.practice_count DESC, q.id DESC</when>
+                     <when test="query.sort == 'difficulty'">q.difficulty ASC, q.id ASC</when>
+                     <otherwise>q.published_at DESC, q.id DESC</otherwise>
+                   </choose>
+                 </when>
+                 <when test="query.sort == 'hot'">ORDER BY q.practice_count DESC, q.id DESC</when>
+                 <when test="query.sort == 'difficulty'">ORDER BY q.difficulty ASC, q.id ASC</when>
+                 <otherwise>ORDER BY q.published_at DESC, q.id DESC</otherwise>
+               </choose>
+             ) AS rn
+      FROM question q
+      JOIN category c ON c.id = q.category_id
+      <include refid="questionFilter"/>
+    )
+    SELECT
+      (SELECT id FROM ordered WHERE rn = (SELECT rn FROM ordered WHERE id = #{id}) - 1) AS prev_id,
+      (SELECT id FROM ordered WHERE rn = (SELECT rn FROM ordered WHERE id = #{id}) + 1) AS next_id
+  </select>
+
+  <!-- B. 我的收藏：与 /favorites 同源（收藏时间倒序） -->
+  <select id="selectFavoriteNeighborIds" resultType="com.codeinterview.question.vo.NeighborIds">
+    WITH ordered AS (
+      SELECT f.question_id AS id,
+             ROW_NUMBER() OVER (ORDER BY f.created_at DESC, f.id DESC) AS rn
+      FROM user_favorite f
+      JOIN question q ON q.id = f.question_id AND q.deleted = 0 AND q.status = 1
+      JOIN category c ON c.id = q.category_id AND c.status = 1
+      WHERE f.user_id = #{userId}
+    )
+    SELECT
+      (SELECT id FROM ordered WHERE rn = (SELECT rn FROM ordered WHERE id = #{id}) - 1) AS prev_id,
+      (SELECT id FROM ordered WHERE rn = (SELECT rn FROM ordered WHERE id = #{id}) + 1) AS next_id
+  </select>
+
+  <!-- C. 错题本：scope 与 /wrong-book 同义；排序与 WrongRecordMapper 的列表排序保持一致 -->
+  <select id="selectWrongNeighborIds" resultType="com.codeinterview.question.vo.NeighborIds">
+    WITH ordered AS (
+      SELECT w.question_id AS id,
+             ROW_NUMBER() OVER (
+               <choose>
+                 <when test='"mastered".equals(scope)'>ORDER BY w.mastered_at DESC, w.id DESC</when>
+                 <when test='"reviewing".equals(scope)'>ORDER BY w.due_at ASC, w.id DESC</when>
+                 <when test='"all".equals(scope) or "reviewed".equals(scope)'>ORDER BY w.updated_at DESC, w.id DESC</when>
+                 <otherwise>ORDER BY w.due_at ASC, w.last_wrong_at DESC, w.id DESC</otherwise>
+               </choose>
+             ) AS rn
+      FROM wrong_record w
+      JOIN question q ON q.id = w.question_id AND q.deleted = 0 AND q.status = 1
+      JOIN category c ON c.id = q.category_id AND c.status = 1
+      WHERE w.user_id = #{userId}
+      <choose>
+        <when test='"learning".equals(scope)'> AND w.resolved = 0 </when>
+        <when test='"reviewing".equals(scope)'> AND w.resolved = 1 AND w.due_at IS NOT NULL AND w.review_streak &lt; 4 </when>
+        <when test='"mastered".equals(scope)'> AND w.review_streak &gt;= 4 </when>
+        <when test='"reviewed".equals(scope)'> AND w.resolved = 1 </when>
+      </choose>
+    )
+    SELECT
+      (SELECT id FROM ordered WHERE rn = (SELECT rn FROM ordered WHERE id = #{id}) - 1) AS prev_id,
+      (SELECT id FROM ordered WHERE rn = (SELECT rn FROM ordered WHERE id = #{id}) + 1) AS next_id
+  </select>
+
+  <!-- v3.6 C10：相似题 —— 同分类优先、其次共享标签；按热度取前 N，排除自己 -->
+  <select id="selectSimilar" resultType="com.codeinterview.question.vo.QuestionBriefResp">
+    SELECT q.id, q.title, q.category_id, c.name AS category_name,
+           q.difficulty, q.view_count, q.practice_count, q.published_at
+    FROM question q
+    JOIN category c ON c.id = q.category_id
+    WHERE q.status = 1 AND q.deleted = 0 AND c.status = 1 AND q.id != #{id}
+      AND (
+        q.category_id = #{categoryId}
+        OR EXISTS (
+          SELECT 1 FROM question_tag a
+          JOIN question_tag b ON b.tag_id = a.tag_id
+          WHERE a.question_id = #{id} AND b.question_id = q.id
+        )
+      )
+    ORDER BY (q.category_id = #{categoryId}) DESC, q.practice_count DESC, q.id DESC
+    LIMIT #{limit}
+  </select>
+
+  <select id="selectFavoriteFlag" resultType="java.lang.Integer">    SELECT 1
     FROM user_favorite
     WHERE user_id = #{userId} AND question_id = #{questionId}
     LIMIT 1
@@ -112,5 +285,37 @@
   <update id="increaseViewCount">
     UPDATE question SET view_count = view_count + 1 WHERE id = #{id}
   </update>
+
+  <!-- v4.1：记录一次「用户 × 题目」浏览。
+       幂等：首次插入，之后只刷新 last_viewed_at；first_viewed_at 保留第一次的时间。
+       不做「读后写」两段查询，避免并发下的重复键异常。 -->
+  <insert id="upsertQuestionView">
+    INSERT INTO question_view (user_id, question_id, first_viewed_at, last_viewed_at)
+    VALUES (#{userId}, #{questionId}, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
+    ON DUPLICATE KEY UPDATE last_viewed_at = CURRENT_TIMESTAMP(3)
+  </insert>
+
+  <!-- v4.2：最近浏览的题目（练习页左侧列表）。
+       过滤条件与题库列表一致：题未删除/已发布、分类启用；否则会出现点进去 404 的死链。 -->
+  <select id="selectRecentViews" resultType="com.codeinterview.question.vo.RecentViewResp">
+    SELECT q.id            AS id,
+           q.title         AS title,
+           q.difficulty    AS difficulty,
+           q.category_id   AS category_id,
+           c.name          AS category_name,
+           v.last_viewed_at AS last_viewed_at
+    FROM question_view v
+    JOIN question q ON q.id = v.question_id
+    JOIN category c ON c.id = q.category_id
+    WHERE v.user_id = #{userId}
+      AND q.deleted = 0
+      AND q.status = 1
+      AND c.status = 1
+      <if test="categoryId != null">
+        AND q.category_id = #{categoryId}
+      </if>
+    ORDER BY v.last_viewed_at DESC, q.id DESC
+    LIMIT #{limit}
+  </select>
 
 </mapper>

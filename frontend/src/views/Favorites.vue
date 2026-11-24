@@ -129,7 +129,12 @@ function handlePageChange(next) {
 }
 
 function goDetail(question) {
-  router.push({ name: 'question-detail', params: { id: question.id } })
+  // v3.6 修1：上下题按「我的收藏」顺序（收藏时间倒序）
+  router.push({
+    name: 'question-detail',
+    params: { id: question.id },
+    query: { ctx: 'favorite' }
+  })
 }
 
 function goQuestionList() {
@@ -156,8 +161,8 @@ onMounted(loadFavorites)
 
 .favorites__title {
   color: var(--color-text);
-  font-size: var(--font-size-h2);
-  line-height: var(--line-height-h2);
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-h1);
   font-weight: 600;
 }
 

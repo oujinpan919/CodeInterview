@@ -33,7 +33,7 @@ public class PracticeRecord {
     /** 1 掌握 / 2 模糊 / 3 不会 */
     private Integer selfAssess;
 
-    /** 1 详情页 / 2 随机刷题（V1 不用） / 3 错题本复习 */
+    /** 1 详情页 / 2 随机练习 / 3 错题本复习 */
     private Integer source;
 
     private LocalDateTime createdAt;

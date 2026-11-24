@@ -1,6 +1,8 @@
 -- ============================================================
 -- 码上记 CodeInterview · 演示数据（T18）
--- 前置：已执行 db/init.sql（11 张表 + 5 分类 / 15 标签 / 3 道草稿题）
+-- ⚠️ 仅限本机演示：会创建 admin/demo 已知口令 123456。
+-- ⚠️ 严禁在生产环境执行；生产请用 ADMIN_INIT_PASSWORD 创建独立强密码管理员。
+-- 前置：已执行 db/init.sql（12 张表 + 5 分类 / 15 标签 / 3 道草稿题）
 -- 执行：
 --   "D:\Develop\MySQL\MySQLServer8.0\bin\mysql.exe" -uroot -p --default-character-set=utf8mb4 \
 --     -e "source D:/Develop/Agent/projects/CodeInterview/db/seed-demo.sql"

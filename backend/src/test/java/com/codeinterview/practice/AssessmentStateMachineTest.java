@@ -28,7 +28,7 @@ import com.codeinterview.user.UserService;
  * <p>用例自建用户与发布态题目、自清数据，不依赖 seed 题目的状态（q1 仍是草稿）。
  */
 @SpringBootTest
-@ActiveProfiles("mock")
+@ActiveProfiles({"mock", "test"})
 class AssessmentStateMachineTest {
 
     @Autowired
@@ -108,12 +108,54 @@ class AssessmentStateMachineTest {
     }
 
     @Test
-    void masteredWithoutWrongRecordDoesNotCreateRow() {
+    void masteredWithoutWrongRecordCreatesScheduledRow() {
         AssessmentResp resp = assess(1, 1);
 
-        assertThat(resp.getWrongBook()).isNull();
-        assertThat(wrongRecord()).isNull();
+        // v3.6：所有自评过的题都进复习队列 —— 从未答错的题也会建行，但没有答错语义
+        assertThat(resp.getWrongBook()).isNotNull();
+        assertThat(resp.getWrongBook().getStage()).isEqualTo("reviewing");
+        Map<String, Object> row = wrongRecord();
+        assertThat(row).isNotNull();
+        assertThat(((Number) row.get("wrong_count")).intValue()).isZero();
+        assertThat(row.get("first_wrong_at")).isNull();
+        assertThat(row.get("last_wrong_at")).isNull();
+        assertThat(((Number) row.get("resolved")).intValue()).isEqualTo(1);
+        assertThat(((Number) row.get("review_streak")).intValue()).isEqualTo(1);
+        assertThat(((Number) row.get("interval_days")).intValue()).isEqualTo(1);
+        assertThat(row.get("due_at")).isNotNull();
         assertThat(practiceCount()).isEqualTo(1);
+    }
+
+    /** v3.6 掌握阶梯：1 → 3 → 7 天，第 4 次掌握退出复习队列（due_at 置空、interval=0）。 */
+    @Test
+    void masteryLadderExitsQueueOnFourthMastery() {
+        assess(3, 1);
+        assertSchedule(0, 1, false);
+
+        assess(1, 1);
+        assertSchedule(1, 1, false);
+        assess(1, 1);
+        assertSchedule(2, 3, false);
+        assess(1, 1);
+        assertSchedule(3, 7, false);
+        assess(1, 1);
+        assertSchedule(4, 0, true);
+
+        // 真掌握后再次自评「模糊」→ 重新进入队列，间隔回到 1 天
+        assess(2, 1);
+        assertSchedule(0, 1, false);
+    }
+
+    private void assertSchedule(int streak, int intervalDays, boolean exitedQueue) {
+        Map<String, Object> row = wrongRecord();
+        assertThat(row).isNotNull();
+        assertThat(((Number) row.get("review_streak")).intValue()).isEqualTo(streak);
+        assertThat(((Number) row.get("interval_days")).intValue()).isEqualTo(intervalDays);
+        if (exitedQueue) {
+            assertThat(row.get("due_at")).isNull();
+        } else {
+            assertThat(row.get("due_at")).isNotNull();
+        }
     }
 
     private AssessmentResp assess(int selfAssess, int source) {
@@ -138,7 +180,8 @@ class AssessmentStateMachineTest {
 
     private Map<String, Object> wrongRecord() {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT last_assess, wrong_count, resolved, mastered_at FROM wrong_record "
+                "SELECT last_assess, wrong_count, resolved, mastered_at, first_wrong_at, last_wrong_at, "
+                        + "due_at, interval_days, review_streak FROM wrong_record "
                         + "WHERE user_id = ? AND question_id = ?", userId, questionId);
         return rows.isEmpty() ? null : rows.get(0);
     }

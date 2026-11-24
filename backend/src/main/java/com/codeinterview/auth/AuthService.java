@@ -3,6 +3,7 @@ package com.codeinterview.auth;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import com.codeinterview.auth.dto.LoginReq;
@@ -14,6 +15,7 @@ import com.codeinterview.auth.vo.RegisterResp;
 import com.codeinterview.auth.vo.UserResp;
 import com.codeinterview.common.exception.BusinessException;
 import com.codeinterview.common.result.ResultCode;
+import com.codeinterview.common.storage.StorageService;
 import com.codeinterview.user.UserService;
 import com.codeinterview.user.entity.User;
 
@@ -37,6 +39,8 @@ public class AuthService {
 
     private final UserService userService;
     private final LoginAttemptGuard loginAttemptGuard;
+    private final StorageService storageService;
+    private final Environment environment;
 
     @Value("${app.register-enabled:true}")
     private boolean registerEnabled;
@@ -136,13 +140,43 @@ public class AuthService {
         if (req.getOldPassword().equals(req.getNewPassword())) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "新密码不能与旧密码相同");
         }
-        String policyError = PasswordPolicy.validate(req.getNewPassword(), user.getNickname());
+        String policyError = Integer.valueOf(User.ROLE_ADMIN).equals(user.getRole()) && isProdProfile()
+                ? PasswordPolicy.validateAdminForProd(req.getNewPassword(), user.getNickname())
+                : PasswordPolicy.validate(req.getNewPassword(), user.getNickname());
         if (policyError != null) {
             throw new BusinessException(ResultCode.PARAM_ERROR, policyError);
         }
         userService.updatePassword(userId, req.getNewPassword());
         StpUtil.kickout(userId);
         log.info("password updated userId={}", userId);
+    }
+
+    /**
+     * v4.12 更新头像。
+     *
+     * <p>与改名/改密不同，这里**不 kickout**：头像是展示属性，不影响登录凭证，
+     * 踢下线会让用户每次换头像都被迫重新登录。改完立即返回新的 UserResp，前端原地更新。
+     *
+     * <p>旧图在写库成功后删除（best-effort）：先写库再删，万一删除失败只是留个孤儿对象，
+     * 反过来先删后写会导致「库还指向已删对象」的裂图，更糟。
+     */
+    public UserResp updateAvatar(String avatarUrl) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        User user = currentUserOrThrow();
+        String next = avatarUrl == null ? "" : avatarUrl.trim();
+        String oldAvatar = user.getAvatar();
+        String normalized = next.isEmpty() ? null : next;
+        if (normalized != null && !storageService.isOwnedUrl(userId, normalized)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR,
+                    "头像必须使用本人上传的图片，不能使用外部链接或他人的图片");
+        }
+        userService.updateAvatar(userId, normalized);
+        if (oldAvatar != null && !oldAvatar.isBlank() && !oldAvatar.equals(normalized)) {
+            storageService.deleteOwnedQuietly(userId, storageService.keyFromUrl(oldAvatar));
+        }
+        log.info("avatar updated userId={} empty={}", userId, normalized == null);
+        user.setAvatar(normalized);
+        return userService.toResp(user);
     }
 
     private User currentUserOrThrow() {
@@ -153,5 +187,14 @@ public class AuthService {
             throw new BusinessException(ResultCode.UNAUTHORIZED);
         }
         return user;
+    }
+
+    private boolean isProdProfile() {
+        for (String profile : environment.getActiveProfiles()) {
+            if ("prod".equalsIgnoreCase(profile)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

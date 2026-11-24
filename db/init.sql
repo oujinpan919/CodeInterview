@@ -1,5 +1,5 @@
 -- ============================================================
--- 码上记 CodeInterview · 初始化脚本（唯一建表真源）
+-- 码上记 CodeInterview · 初始化脚本（唯一建表真源，12 张表）
 -- MySQL 8.0.46（本机主路径；所用语法 utf8mb4_0900_ai_ci / DATETIME(3) 默认值 /
 --   ON DUPLICATE KEY UPDATE / INSERT IGNORE 均为 8.0 支持项）/ 8.4（容器备选）
 -- 执行方式（本机，root 执行一次）：
@@ -17,6 +17,7 @@ USE `codeinterview`;
 CREATE TABLE IF NOT EXISTS `user` (
   `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `nickname`      VARCHAR(20)     NOT NULL                COMMENT '昵称=登录名+展示名；2-20 字，可中文；全站唯一（大小写不敏感）',
+  `avatar`        VARCHAR(512)    NULL                    COMMENT '头像 URL（OSS）；NULL 时前端回退首字母色块（v4.12）',
   `password`      VARCHAR(72)     NOT NULL                COMMENT 'BCrypt 哈希（cost=12，60 字符，留余量）',
   `role`          TINYINT         NOT NULL DEFAULT 0      COMMENT '0 普通用户 / 1 管理员',
   `status`        TINYINT         NOT NULL DEFAULT 1      COMMENT '1 正常 / 0 禁用',
@@ -115,7 +116,7 @@ CREATE TABLE IF NOT EXISTS `practice_record` (
   `user_id`     BIGINT UNSIGNED NOT NULL,
   `question_id` BIGINT UNSIGNED NOT NULL,
   `self_assess` TINYINT         NOT NULL              COMMENT '1 掌握 / 2 模糊 / 3 不会',
-  `source`      TINYINT         NOT NULL DEFAULT 1    COMMENT '1 详情页 / 2 随机刷题（V1 不用） / 3 错题本复习',
+  `source`      TINYINT         NOT NULL DEFAULT 1    COMMENT '1 详情页 / 2 随机练习 / 3 错题本复习',
   `created_at`  DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   PRIMARY KEY (`id`),
   KEY `idx_user_created` (`user_id`, `created_at`),
@@ -124,24 +125,69 @@ CREATE TABLE IF NOT EXISTS `practice_record` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='刷题记录（只增不改不删）';
 
 -- ------------------------------------------------------------
--- 8. 错题本
+-- 8. 复习条目 / 错题本（v3.6：所有自评过的题都有一行；错题本降级为 scope 视图，见 03 §11）
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `wrong_record` (
   `id`             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id`        BIGINT UNSIGNED NOT NULL,
   `question_id`    BIGINT UNSIGNED NOT NULL,
   `last_assess`    TINYINT         NOT NULL              COMMENT '最近一次自评档位 1/2/3',
-  `wrong_count`    INT UNSIGNED    NOT NULL DEFAULT 1    COMMENT '累计答错（自评 2/3）次数',
-  `first_wrong_at` DATETIME(3)     NOT NULL              COMMENT '首次进入错题本时间',
-  `last_wrong_at`  DATETIME(3)     NOT NULL              COMMENT '最近一次答错时间',
+  `wrong_count`    INT UNSIGNED    NOT NULL DEFAULT 1    COMMENT '累计答错（自评 2/3）次数；只掌握过则为 0',
+  `first_wrong_at` DATETIME(3)     NULL                  COMMENT '首次进入错题本时间；从未答错则为 NULL（v3.6）',
+  `last_wrong_at`  DATETIME(3)     NULL                  COMMENT '最近一次答错时间；从未答错则为 NULL（v3.6）',
   `resolved`       TINYINT         NOT NULL DEFAULT 0    COMMENT '0 在错题本 / 1 已掌握',
   `mastered_at`    DATETIME(3)     NULL                  COMMENT '标记掌握时间，回到 0 时清空',
+  `due_at`         DATETIME(3)     NULL                  COMMENT '下次复习到期时间；NULL=已退出复习队列（真掌握），v3.6',
+  `interval_days`  INT             NOT NULL DEFAULT 0    COMMENT '当前复习间隔（天）；0=未排程/已退出队列，v3.6',
+  `review_streak`  INT             NOT NULL DEFAULT 0    COMMENT '连续掌握次数（封顶 4）；>=4 判真掌握，v3.6',
   `created_at`     DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   `updated_at`     DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_user_question` (`user_id`, `question_id`),
-  KEY `idx_user_resolved` (`user_id`, `resolved`, `last_wrong_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='错题本';
+  KEY `idx_user_resolved` (`user_id`, `resolved`, `last_wrong_at`),
+  KEY `idx_user_due` (`user_id`, `due_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='复习条目（错题本为其 scope 视图）';
+
+-- ------------------------------------------------------------
+-- 9. 题目私有笔记（v3.6 C6；导出见 C7）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `question_note` (
+  `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id`     BIGINT UNSIGNED NOT NULL              COMMENT '归属用户 user.id；不建物理外键',
+  `question_id` BIGINT UNSIGNED NOT NULL              COMMENT '题目 question.id',
+  `content_md`  MEDIUMTEXT      NOT NULL              COMMENT '笔记正文 Markdown，≤20000 字符（服务端校验）',
+  `created_at`  DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at`  DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_question` (`user_id`, `question_id`),
+  KEY `idx_user_updated` (`user_id`, `updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='题目私有笔记（每用户每题一条）';
+-- ------------------------------------------------------------
+-- 10. 刷题路线（v3.6 C8；路线内容由 migration-v4-path.sql 落库）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `learning_path` (
+  `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name`        VARCHAR(80)     NOT NULL              COMMENT '路线名（唯一）',
+  `description` VARCHAR(255)    NOT NULL DEFAULT ''   COMMENT '一句话说明',
+  `sort`        INT             NOT NULL DEFAULT 0    COMMENT '排序（小的在前）',
+  `status`      TINYINT         NOT NULL DEFAULT 1    COMMENT '1 启用 / 0 停用',
+  `created_at`  DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at`  DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_name` (`name`),
+  KEY `idx_status_sort` (`status`, `sort`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='刷题路线（v3.6 C8）';
+
+CREATE TABLE IF NOT EXISTS `learning_path_item` (
+  `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `path_id`     BIGINT UNSIGNED NOT NULL              COMMENT 'learning_path.id',
+  `question_id` BIGINT UNSIGNED NOT NULL              COMMENT 'question.id',
+  `sort`        INT             NOT NULL DEFAULT 0    COMMENT '路线内序号（从 1 开始）',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_path_question` (`path_id`, `question_id`),
+  KEY `idx_path_sort` (`path_id`, `sort`),
+  KEY `idx_question` (`question_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='路线题目（有序题单；v3.6 C8）';
 
 -- ------------------------------------------------------------
 -- 9. AI 账号日额度
@@ -191,6 +237,26 @@ CREATE TABLE IF NOT EXISTS `ai_chat_log` (
   KEY `idx_user_created` (`user_id`, `created_at`),
   KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI 调用审计（不存消息正文）';
+
+-- ------------------------------------------------------------
+-- 12. 练习会话（进度落库，跨重启/换浏览器保留）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `practice_session` (
+  `id`              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT                COMMENT '练习会话 id',
+  `user_id`         BIGINT UNSIGNED NOT NULL                               COMMENT '归属用户 user.id；只从登录态取，不建物理外键',
+  `status`          TINYINT         NOT NULL DEFAULT 1                      COMMENT '1 进行中 / 2 已完成 / 3 已放弃 / 4 已完成（部分跳过）',
+  `active_flag`     TINYINT         NULL     DEFAULT 1                      COMMENT '进行中=1，结束态=NULL；配合 uk_user_active 保证同一用户至多 1 个进行中（NULL 不参与唯一约束）',
+  `question_ids`    JSON            NOT NULL                                COMMENT '会话题序：有序 question.id JSON 数组，如 [201,205,318]；长度即总题数 M',
+  `total_count`     INT UNSIGNED    NOT NULL DEFAULT 0                      COMMENT '总题数 M = JSON_LENGTH(question_ids)，冗余避免每次解析 JSON',
+  `current_index`   INT UNSIGNED    NOT NULL DEFAULT 0                      COMMENT '当前断点下标（0-based，指向 question_ids）；只单调前进，不回退',
+  `completed_count` INT UNSIGNED    NOT NULL DEFAULT 0                      COMMENT '已完成题数 X；按题去重 +1（E-07）',
+  `skipped_count`   INT UNSIGNED    NOT NULL DEFAULT 0                      COMMENT '因下架/删除/分类停用而跳过的题数 S；完成态满足 X = M - S（E-04/AC-E10）',
+  `created_at`      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at`      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_active` (`user_id`, `active_flag`),
+  KEY `idx_user_status` (`user_id`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='练习会话（进度落库；保留历史不物理删除）';
 
 -- 分类（5 个）
 INSERT INTO `category` (`name`, `description`, `sort`) VALUES

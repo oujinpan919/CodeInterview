@@ -23,6 +23,12 @@ spring:
   jackson:
     time-zone: Asia/Shanghai
     default-property-inclusion: always
+  servlet:
+    multipart:
+      # v4.12：图片上传。Spring 默认单文件 1MB / 单请求 10MB，对截图类图片不够用；
+      # 与 app.storage.max-bytes（5MB）保持一致，超限由 StorageService 给更友好的提示。
+      max-file-size: 5MB
+      max-request-size: 6MB
   mvc:
     throw-exception-if-no-handler-found: true
     async:
@@ -69,8 +75,24 @@ sa-token:
   token-style: uuid
 
 # 注册开关（01 F01：可关闭；关闭后注册返回 40300）
+# v3.20：encrypt.key 为用户凭证主密钥（D3）。优先环境变量 APP_ENCRYPT_KEY；
+# 缺失时 MasterKeyProvider 自动生成并写入 ./config/application-local.yml。
 app:
   register-enabled: true
+  encrypt:
+    key: ${APP_ENCRYPT_KEY:}
+  # v4.12 图片对象存储（阿里云 OSS）。凭证只来自 config/application-local.yml 或环境变量，
+  # 本文件不得出现真实 Key；enabled=false 时上传返回 50203，站点其余功能不受影响。
+  storage:
+    enabled: ${OSS_ENABLED:false}
+    endpoint: ${OSS_ENDPOINT:oss-cn-shenzhen.aliyuncs.com}
+    bucket: ${OSS_BUCKET:codeinterview}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    prefix: ${OSS_PREFIX:codeinterview/images}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}
+    max-bytes: ${OSS_MAX_BYTES:5242880}
+    date-path: true
 
 # AI 助手（05 §7）。Key 只来自 spring.config.import 加载的 config/application-local.yml
 # 或环境变量 AI_API_KEY（环境变量优先级更高）；本文件不得出现真实 Key。
@@ -91,6 +113,10 @@ ai:
   max-chars: 6000
   max-single-chars: 2000
   system-prompt-file: classpath:prompt/system.txt
+  # v3.20：多模型接入（08 §6）。
+  # allow-private-network=true 仅用于 mock/集成测试（mock 上游监听 127.0.0.1）；
+  # 生产必须保持 false，否则 SSRF 防护失效。
+  allow-private-network: ${AI_ALLOW_PRIVATE_NETWORK:false}
   quota:
     user-daily: ${AI_USER_DAILY:30}
     site-daily: ${AI_SITE_DAILY:300}

@@ -4,7 +4,7 @@
     <h1 class="status-page__title">页面不存在</h1>
     <p class="status-page__desc">你访问的页面不存在，或者已经被移除。</p>
     <div class="status-page__actions">
-      <el-button type="primary" @click="router.push('/')">回首页</el-button>
+      <el-button type="primary" @click="router.push('/home')">回首页</el-button>
       <el-button @click="router.push('/question')">去题库</el-button>
     </div>
   </section>
@@ -22,7 +22,8 @@ const router = useRouter()
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - var(--header-height) - 160px);
+  /* v4.11：同 Forbidden.vue，不再按页脚固定高度估算，改为视口比例 */
+  min-height: 60dvh;
   padding: var(--space-10) var(--space-4);
   text-align: center;
 }

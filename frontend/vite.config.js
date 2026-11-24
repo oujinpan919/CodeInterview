@@ -13,6 +13,9 @@ export default defineConfig({
   resolve: { alias: { '@': '/src' } },
   server: {
     port: 5173,
+    // 显式绑 IPv4：Node 在某些机器上把 localhost 解析为 ::1 只监听 IPv6，
+    // 而 README §3.4 与 health 探活都写 127.0.0.1（IPv4），否则会连不上。
+    host: '127.0.0.1',
     proxy: { '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true } }
   },
   build: {

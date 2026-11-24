@@ -12,9 +12,14 @@ export function getPracticeRecords(params) {
   return request.get('/practice-records', { params })
 }
 
-/** 错题本列表：resolved=0 未掌握 / 1 已掌握 */
+/** 错题本列表（v3.6）：scope=learning/reviewing/mastered/reviewed/all，缺省 learning */
 export function getWrongBook(params) {
   return request.get('/wrong-book', { params })
+}
+
+/** 错题本三视图角标（04 A3.4 #19，v3.6） */
+export function getWrongBookSummary() {
+  return request.get('/wrong-book/summary')
 }
 
 /** 标记掌握（幂等） */

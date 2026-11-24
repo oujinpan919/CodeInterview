@@ -22,7 +22,9 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 const props = defineProps({
   page: { type: Number, required: true },
   size: { type: Number, required: true },
-  total: { type: Number, required: true }
+  total: { type: Number, required: true },
+  /** v3.13：页面自身已展示总数时传 false，避免「共 N 题」与分页「共 N 条」重复 */
+  showTotal: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['change'])
@@ -30,7 +32,10 @@ const emit = defineEmits(['change'])
 const isMobile = useMediaQuery('(max-width: 767px)')
 
 // 桌面按 04 B3；手机按 04 B7.2 只保留「上一页/下一页 + 页码」
-const layout = computed(() => (isMobile.value ? 'prev, pager, next' : 'prev, pager, next, total'))
+const layout = computed(() => {
+  if (isMobile.value) return 'prev, pager, next'
+  return props.showTotal ? 'prev, pager, next, total' : 'prev, pager, next'
+})
 
 function handleChange(next) {
   if (next !== props.page) emit('change', next)

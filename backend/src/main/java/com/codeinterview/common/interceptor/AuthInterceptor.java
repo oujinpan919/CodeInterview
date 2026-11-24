@@ -32,9 +32,15 @@ public class AuthInterceptor implements HandlerInterceptor {
             "/api/v1/health",
             "/error");
 
-    /** 公开只读 GET（含详情与上下题）。 */
+    /**
+     * 用精确正则而非 02 §5.4 文档写的 questions* 前缀（K-1）：前缀会误放行 /questions 下的写操作；
+     * 新增公开只读路径必须同步此正则，否则游客会被 40100 拦截。
+     * v3.6 C10：新增公开只读 `/questions/{id}/similar`；`/questions/{id}/note` 不在白名单（需登录）。
+     * v3.6 C8：`/learning-paths` 与 `/learning-paths/{id}` 公开只读（游客也能看路线，进度为 null）。
+     */
     private static final Pattern PUBLIC_GET_PATTERN =
-            Pattern.compile("^/api/v1/(home|categories|tags|questions(/\\d+)?(/neighbors)?)$");
+            Pattern.compile("^/api/v1/(home|categories|tags|learning-paths(/\\d+)?"
+                    + "|questions(/random|/\\d+)?(/neighbors|/similar)?)$");
 
     private final UserMapper userMapper;
 

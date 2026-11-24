@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 三档自评入参（04 A3.4 #14）：selfAssess 必填 1/2/3，source 可选（1 详情 / 3 错题本复习）。
+ * 三档自评入参（04 A3.4 #14）：selfAssess 必填 1/2/3，source 可选（1 详情 / 2 随机练习 / 3 错题本复习）。
  */
 @Data
 public class AssessmentReq {

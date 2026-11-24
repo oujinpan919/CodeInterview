@@ -33,16 +33,18 @@ public class ChatController {
     private final ChatService chatService;
     private final QuotaService quotaService;
 
-    @Operation(summary = "助手额度（账号日额度 / 全站剩余）")
+    @Operation(summary = "助手额度（账号日额度 / 全站剩余 / 管理员不限次）")
     @GetMapping("/quota")
     public Result<AiQuotaResp> quota() {
         Long userId = StpUtil.getLoginIdAsLong();
-        return Result.success(quotaService.quotaInfo(userId));
+        return Result.success(quotaService.quotaInfo(userId, isUnlimited()));
     }
 
     /**
      * 流开始前失败（40000/40100/40400/42901/42902/50201）由 GlobalExceptionHandler 返回 JSON；
      * 流开始后只发 event:error（05 §4.3）。
+     *
+     * <p>管理员判定只在这里做一次：worker 线程禁止调用 StpUtil（05 §3.2），所以把布尔值传进 service。
      */
     @Operation(summary = "助手流式对话（SSE，05 §4 契约）")
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -53,7 +55,7 @@ public class ChatController {
         if (sessionId != null && !sessionId.isBlank()) {
             req.setSessionId(sessionId.trim());
         }
-        SseEmitter emitter = chatService.chat(userId, req);
+        SseEmitter emitter = chatService.chat(userId, req, isUnlimited());
         // 建流成功后才写 SSE 响应头：流前异常必须保持 application/json
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType("text/event-stream;charset=UTF-8");
@@ -61,5 +63,10 @@ public class ChatController {
         response.setHeader("Connection", "keep-alive");
         response.setHeader("X-Accel-Buffering", "no");
         return emitter;
+    }
+
+    /** 管理员（role=1）不受账号/全站「次数」限制；间隔与并发仍生效（05 §5.5）。 */
+    private boolean isUnlimited() {
+        return StpUtil.hasRole("ADMIN");
     }
 }

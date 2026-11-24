@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import com.codeinterview.stats.vo.CategoryStatResp;
+import com.codeinterview.stats.vo.DifficultyStatResp;
 import com.codeinterview.stats.vo.StatsSummaryRow;
 import com.codeinterview.stats.vo.TrendRow;
 
@@ -34,4 +35,11 @@ public interface StatsMapper {
 
     /** 分类分布（03 §8.7）：count 合计等于总自评条数。 */
     List<CategoryStatResp> selectCategory(@Param("userId") Long userId);
+
+    List<DifficultyStatResp> selectDifficultyStats(@Param("userId") Long userId);
+
+    long countCompletedSessions(@Param("userId") Long userId);
+
+    /** 发布态题目数（v3.6 覆盖率分母）；口径与首页/题库一致：status=1 AND deleted=0。 */
+    long countPublishedQuestions();
 }

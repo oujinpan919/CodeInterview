@@ -11,7 +11,16 @@
     @keydown.enter.prevent="handleClick"
   >
     <div class="question-card__head">
-      <h3 class="question-card__title">{{ question.title }}</h3>
+      <!-- v4.1：未访问→主色蓝，已访问→绿色（与题库表格列表同一套语义） -->
+      <h3
+        class="question-card__title"
+        :class="{
+          'question-card__title--unvisited': question.visited === false,
+          'question-card__title--visited': question.visited === true
+        }"
+      >
+        <HighlightText :text="question.title" :keyword="keyword" />
+      </h3>
       <el-tag v-if="isOffline" type="info" size="small" effect="plain" class="question-card__offline">
         已下架
       </el-tag>
@@ -46,10 +55,13 @@
 <script setup>
 import { computed } from 'vue'
 import DifficultyTag from '@/components/DifficultyTag.vue'
+import HighlightText from '@/components/HighlightText.vue'
 
 const props = defineProps({
   question: { type: Object, required: true },
-  clickable: { type: Boolean, default: true }
+  clickable: { type: Boolean, default: true },
+  /** v3.6 C4：搜索关键词，命中片段用 <mark> 高亮（不拼 HTML，按纯文本切片渲染） */
+  keyword: { type: String, default: '' }
 })
 
 const emit = defineEmits(['click'])
@@ -57,6 +69,8 @@ const emit = defineEmits(['click'])
 // 04 B2 / A1：status=2 已下架 → 置灰、显示「已下架」、不可点击
 const isOffline = computed(() => props.question.status === 2)
 const isClickable = computed(() => props.clickable && !isOffline.value)
+
+
 
 const tags = computed(() => (Array.isArray(props.question.tags) ? props.question.tags : []))
 const hasViewCount = computed(() => typeof props.question.viewCount === 'number')
@@ -74,7 +88,11 @@ function handleClick() {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease);
 }
 
 .question-card--clickable {
@@ -83,7 +101,8 @@ function handleClick() {
 
 .question-card--clickable:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.08);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
 }
 
 .question-card--clickable:focus-visible {
@@ -109,6 +128,16 @@ function handleClick() {
   line-height: var(--line-height-body);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* v4.1：与 QuestionList 的表格列表保持同一套已读配色 */
+.question-card__title--unvisited {
+  color: var(--color-primary);
+}
+
+.question-card__title--visited {
+  /* --color-success 对白底仅 3.09:1，正文标题用深一档的 --color-success-text */
+  color: var(--color-success-text);
 }
 
 .question-card__offline {

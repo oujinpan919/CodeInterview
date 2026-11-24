@@ -47,7 +47,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {"ai.mock.port=0"})
-@ActiveProfiles("mock")
+@ActiveProfiles({"mock", "test"})
 public abstract class ChatTestSupport {
 
     protected static final String AI_CHAT_PATH = "/api/v1/ai/chat";
@@ -84,8 +84,11 @@ public abstract class ChatTestSupport {
     protected long originalMinIntervalMs;
     protected int originalUserConcurrency;
     protected int originalSiteConcurrency;
+    protected int originalUserDaily;
+    protected int originalSiteDaily;
     protected boolean originalEnabled;
     protected String originalApiKey;
+    protected boolean originalAllowPrivateNetwork;
 
     @BeforeEach
     void resetState() {
@@ -93,11 +96,22 @@ public abstract class ChatTestSupport {
         originalMinIntervalMs = aiProperties.getLimit().getMinIntervalMs();
         originalUserConcurrency = aiProperties.getLimit().getUserConcurrency();
         originalSiteConcurrency = aiProperties.getLimit().getSiteConcurrency();
+        originalUserDaily = aiProperties.getQuota().getUserDaily();
+        originalSiteDaily = aiProperties.getQuota().getSiteDaily();
         originalEnabled = aiProperties.isEnabled();
         originalApiKey = aiProperties.getApiKey();
+        originalAllowPrivateNetwork = aiProperties.isAllowPrivateNetwork();
         jdbcTemplate.update("DELETE FROM user_ai_quota");
         jdbcTemplate.update("DELETE FROM site_ai_usage");
         jdbcTemplate.update("DELETE FROM ai_chat_log");
+        // v3.20：多模型接入与会话持久化的表（D2/D3/D6/D14），避免用例间互相污染
+        jdbcTemplate.update("DELETE FROM ai_message");
+        jdbcTemplate.update("DELETE FROM ai_conversation");
+        jdbcTemplate.update("DELETE FROM user_model_config");
+        jdbcTemplate.update("DELETE FROM site_model_config");
+        jdbcTemplate.update("DELETE FROM ai_credential");
+        jdbcTemplate.update("DELETE FROM ai_config_audit");
+        jdbcTemplate.update("UPDATE site_setting SET setting_value = '1' WHERE setting_key = 'allow_user_own_key'");
         rateGate.resetForTest();
         mockServer.resetCounters();
     }
@@ -108,8 +122,11 @@ public abstract class ChatTestSupport {
         aiProperties.getLimit().setMinIntervalMs(originalMinIntervalMs);
         aiProperties.getLimit().setUserConcurrency(originalUserConcurrency);
         aiProperties.getLimit().setSiteConcurrency(originalSiteConcurrency);
+        aiProperties.getQuota().setUserDaily(originalUserDaily);
+        aiProperties.getQuota().setSiteDaily(originalSiteDaily);
         aiProperties.setEnabled(originalEnabled);
         aiProperties.setApiKey(originalApiKey);
+        aiProperties.setAllowPrivateNetwork(originalAllowPrivateNetwork);
         rateGate.resetForTest();
         for (Long userId : createdUserIds) {
             jdbcTemplate.update("DELETE FROM `user` WHERE id = ?", userId);
@@ -123,8 +140,13 @@ public abstract class ChatTestSupport {
 
     /** 直接建用户（不走注册接口，避免注册限频干扰），再走真实登录拿 token。 */
     protected TestUser createUser(String prefix) throws Exception {
+        return createUser(prefix, User.ROLE_NORMAL);
+    }
+
+    /** 指定角色建用户：管理员用例传 {@link User#ROLE_ADMIN}。 */
+    protected TestUser createUser(String prefix, int role) throws Exception {
         String nickname = prefix + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
-        User user = userService.create(nickname, PASSWORD, User.ROLE_NORMAL);
+        User user = userService.create(nickname, PASSWORD, role);
         createdUserIds.add(user.getId());
         String loginBody = objectMapper.writeValueAsString(Map.of("nickname", nickname, "password", PASSWORD));
         HttpResult login = postJson("/api/v1/auth/login", null, loginBody, Duration.ofSeconds(10));
@@ -247,6 +269,12 @@ public abstract class ChatTestSupport {
         List<Integer> rows = jdbcTemplate.queryForList(
                 "SELECT used_count FROM user_ai_quota WHERE user_id = ? AND stat_date = CURDATE()",
                 Integer.class, userId);
+        return rows.isEmpty() ? 0 : rows.get(0);
+    }
+
+    protected int siteUsedCount() {
+        List<Integer> rows = jdbcTemplate.queryForList(
+                "SELECT used_count FROM site_ai_usage WHERE stat_date = CURDATE()", Integer.class);
         return rows.isEmpty() ? 0 : rows.get(0);
     }
 

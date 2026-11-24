@@ -32,8 +32,12 @@ public class QuotaService {
         return LocalDate.now(SHANGHAI);
     }
 
-    /** 04 A3.7 #24：额度条数据；resetAt 为次日 00:00:00。 */
-    public AiQuotaResp quotaInfo(Long userId) {
+    /**
+     * 04 A3.7 #24：额度条数据；resetAt 为次日 00:00:00。
+     *
+     * @param unlimited 管理员为 true：账号额度不计数，前端显示「不限次」而非 x/y
+     */
+    public AiQuotaResp quotaInfo(Long userId, boolean unlimited) {
         LocalDate date = today();
         int used = countUsed(userId, date);
         int dailyLimit = userDailyLimit();
@@ -43,6 +47,7 @@ public class QuotaService {
         resp.setRemaining(Math.max(0, dailyLimit - used));
         resp.setSiteRemaining(Math.max(0, siteDailyLimit() - countSiteUsed(date)));
         resp.setResetAt(date.plusDays(1).atStartOfDay().format(DATE_TIME_FORMATTER));
+        resp.setUnlimited(unlimited);
         return resp;
     }
 

@@ -100,7 +100,7 @@ const submitText = computed(() =>
 // 只接受站内路径，避免 redirect 被用作开放跳转
 const redirectTarget = computed(() => {
   const redirect = route.query.redirect
-  return typeof redirect === 'string' && /^\/(?!\/)/.test(redirect) ? redirect : '/'
+  return typeof redirect === 'string' && /^\/(?!\/)/.test(redirect) ? redirect : '/home'
 })
 
 onMounted(() => {

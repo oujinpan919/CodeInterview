@@ -100,10 +100,22 @@
   border-top: 1px solid var(--color-border);
 }
 
+/*
+ * v4.12：题目配图 / 笔记配图。
+ * 图片来自 OSS，尺寸不可控，必须约束在正文宽度内；display:block + margin auto
+ * 让独占一行的图片居中，行内图片（同一段落有文字）仍保持 inline 不被强拆。
+ */
 .markdown-body img {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius-tag);
+  border: 1px solid var(--color-border);
+}
+
+/* 图片独占段落时居中并留出上下间距（纯行内图不受影响） */
+.markdown-body p > img:only-child {
+  display: block;
+  margin: var(--space-3) auto;
 }
 
 /* 行内代码 */
@@ -141,6 +153,73 @@
 
 .markdown-body pre.shiki {
   background-color: var(--color-bg-card);
+}
+
+/* v4.13：代码块工具条（语言标签 + 复制按钮）。
+   MarkdownView 在 v-html 落盘后用 DOM 包一层 .md-code，
+   因此这里不能假设 pre 的直接父级是 .markdown-body —— 间距全部由 .md-code 接管。 */
+.markdown-body .md-code {
+  position: relative;
+  margin: var(--space-3) 0;
+}
+
+.markdown-body .md-code > pre {
+  margin: 0;
+  border-radius: 0 0 var(--radius-button) var(--radius-button);
+}
+
+.markdown-body .md-code__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px 5px 14px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-aux);
+  line-height: 1.6;
+  background-color: #f7f8fa;
+  border: 1px solid var(--color-border);
+  border-bottom: 0;
+  border-radius: var(--radius-button) var(--radius-button) 0 0;
+}
+
+.markdown-body .md-code__lang {
+  overflow: hidden;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-body .md-code__copy {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-aux);
+  line-height: 1.7;
+  background-color: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-tag);
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.markdown-body .md-code__copy:hover {
+  color: var(--color-primary);
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+
+.markdown-body .md-code__copy:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.markdown-body .md-code__copy.is-done {
+  color: var(--color-success-text);
 }
 
 /* Shiki 失败时的兜底代码块（无高亮） */

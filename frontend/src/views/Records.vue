@@ -72,6 +72,38 @@
       </div>
     </section>
 
+    <section class="records__supplement">
+      <header class="records__supplement-head">
+        <h2 class="records__chart-title">补充观察</h2>
+      </header>
+      <div class="records__supplement-grid">
+        <div class="records__supplement-panel">
+          <h3 class="records__supplement-title">难度掌握分布</h3>
+          <div
+            v-for="row in difficultyRows"
+            :key="row.difficulty"
+            class="records__difficulty-row"
+          >
+            <DifficultyTag :value="row.difficulty" />
+            <span class="records__difficulty-text">
+              自评 {{ row.countText }} 次 · 掌握率 {{ row.rateText }}
+            </span>
+            <el-progress
+              class="records__difficulty-progress"
+              :percentage="row.percent"
+              :stroke-width="6"
+              :show-text="false"
+            />
+          </div>
+        </div>
+        <div class="records__supplement-panel">
+          <h3 class="records__supplement-title">练习会话累计完成数</h3>
+          <p class="records__supplement-value">{{ completedSessions }} 组</p>
+          <p class="records__supplement-hint">累计完成的练习会话</p>
+        </div>
+      </div>
+    </section>
+
     <section class="records__list-card">
       <div class="records__filter">
         <el-radio-group v-model="selfAssessFilter" @change="handleFilterChange">
@@ -166,6 +198,7 @@ import { useMediaQuery } from '@vueuse/core'
 import { getPracticeRecords } from '@/api/record'
 import { getStatsCategory, getStatsOverview, getStatsTrend } from '@/api/stats'
 import BaseChart from '@/components/BaseChart.vue'
+import DifficultyTag from '@/components/DifficultyTag.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
 import PageBar from '@/components/PageBar.vue'
@@ -258,6 +291,14 @@ const metricCards = computed(() => {
       label: '累计题数',
       value: loading ? '…' : failed ? '—' : String(data.totalQuestionCount),
       hint: loading || failed ? '' : `共 ${totalRecordCount} 次自评`,
+      muted: loading || failed
+    },
+    {
+      // v3.6 修2：覆盖率 = 累计自评去重题数 ÷ 发布态题数（分母口径见 04 C2）
+      key: 'coverage',
+      label: '覆盖率',
+      value: loading ? '…' : failed ? '—' : formatRate(data.coverageRate),
+      hint: loading || failed ? '' : `已刷 ${data.totalQuestionCount} / ${data.publishedQuestionCount} 题`,
       muted: loading || failed
     }
   ]
@@ -431,6 +472,33 @@ onMounted(() => {
   loadCategory()
   loadRecords()
 })
+
+const supplementFailed = computed(
+  () => !overviewLoading.value && (overviewError.value || !overview.value)
+)
+const difficultyRows = computed(() => {
+  const list =
+    overview.value && Array.isArray(overview.value.difficultyDistribution)
+      ? overview.value.difficultyDistribution
+      : []
+  return [1, 2, 3].map((difficulty) => {
+    const found = list.find((item) => Number(item.difficulty) === difficulty)
+    const count = found ? Number(found.count) || 0 : 0
+    const rate =
+      count > 0 && found && typeof found.masteredRate === 'number' ? found.masteredRate : null
+    return {
+      difficulty,
+      countText: overviewLoading.value ? '…' : supplementFailed.value ? '—' : String(count),
+      rateText: rate === null ? '—' : `${Math.round(rate * 100)}%`,
+      percent: rate === null ? 0 : Math.max(0, Math.min(100, Math.round(rate * 100)))
+    }
+  })
+})
+const completedSessions = computed(() => {
+  if (overviewLoading.value) return '…'
+  if (supplementFailed.value) return '—'
+  return Number(overview.value.completedSessionCount) || 0
+})
 </script>
 
 <style scoped>
@@ -440,8 +508,8 @@ onMounted(() => {
 
 .records__title {
   color: var(--color-text);
-  font-size: var(--font-size-h2);
-  line-height: var(--line-height-h2);
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-h1);
   font-weight: 600;
 }
 
@@ -451,7 +519,7 @@ onMounted(() => {
 
 .records__metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
@@ -626,14 +694,11 @@ onMounted(() => {
     margin-bottom: var(--space-4);
   }
 
-  /* 04 B7.2：指标卡 2 列（第 5 个占满整行），图表全宽上下堆叠 */
+  /* 04 B7.2：指标卡 2 列 × 3 行（v3.6 增覆盖率卡后共 6 张），图表全宽上下堆叠 */
   .records__metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .records__metric:last-child {
-    grid-column: 1 / -1;
-  }
 
   .records__metric {
     padding: var(--space-3);
@@ -653,6 +718,82 @@ onMounted(() => {
     align-items: center;
     min-height: 44px;
     padding: 0 var(--space-3);
+  }
+}
+
+.records__supplement {
+  margin-bottom: var(--space-6);
+}
+
+.records__supplement-head {
+  margin-bottom: var(--space-3);
+}
+
+.records__supplement-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.records__supplement-panel {
+  min-width: 0;
+  padding: var(--space-4);
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.records__supplement-title {
+  margin-bottom: var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+  line-height: var(--line-height-aux);
+  font-weight: 600;
+}
+
+.records__difficulty-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: 44px;
+  padding: var(--space-2) 0;
+}
+
+.records__difficulty-text {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+  line-height: var(--line-height-aux);
+}
+
+.records__difficulty-progress {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.records__supplement-value {
+  color: var(--color-text);
+  font-size: 26px;
+  line-height: 34px;
+  font-weight: 600;
+}
+
+.records__supplement-hint {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+  line-height: var(--line-height-aux);
+}
+
+@media (max-width: 1023px) {
+  .records__supplement-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .records__difficulty-progress {
+    flex-basis: 100%;
   }
 }
 </style>

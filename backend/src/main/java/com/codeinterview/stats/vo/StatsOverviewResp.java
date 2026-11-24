@@ -1,5 +1,7 @@
 package com.codeinterview.stats.vo;
 
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import lombok.Data;
@@ -20,4 +22,10 @@ public class StatsOverviewResp {
     private int streak;
     private long totalQuestionCount;
     private long totalRecordCount;
+    private List<DifficultyStatResp> difficultyDistribution;
+    private Long completedSessionCount;
+    /** 发布态题目总数（覆盖率分母） */
+    private long publishedQuestionCount;
+    /** 覆盖率 = 累计自评去重题数 ÷ 发布态题目总数；0–1 小数，分母为 0 时 null */
+    private Double coverageRate;
 }

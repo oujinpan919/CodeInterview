@@ -12,13 +12,14 @@
           <div class="home-loading__actions">
             <span class="home-loading__button" />
             <span class="home-loading__button" />
+            <span class="home-loading__button" />
           </div>
         </div>
         <div class="home-loading__hero-visual" />
       </div>
 
       <div class="home-loading__categories">
-        <div v-for="item in 5" :key="`skeleton-category-${item}`" class="home-loading__cat" />
+        <div v-for="item in 9" :key="`skeleton-category-${item}`" class="home-loading__cat" />
       </div>
 
       <div class="home-loading__panels">
@@ -37,8 +38,64 @@
     </div>
 
     <template v-else>
-      <!-- Hero -->
-      <section class="home-hero">
+      <!-- 今日计划（v3.6 / 01 F-009）：登录后的首屏唯一行动入口，替换原「站点介绍」Hero -->
+      <section v-if="isLogin" class="home-today">
+        <div class="home-today__copy">
+          <p class="home-today__eyebrow">TODAY · 今日计划</p>
+          <template v-if="todayError">
+            <p class="home-today__sub">今日计划加载失败，可直接去题库刷题</p>
+          </template>
+          <template v-else>
+            <h1 class="home-today__title">
+              <template v-if="todayPlan.dueCount > 0">
+                今天有 <em>{{ todayPlan.dueCount }}</em> 道题该复习了
+              </template>
+              <template v-else>今天没有到期的复习</template>
+            </h1>
+            <p class="home-today__sub">
+              <span v-if="todayPlan.overdueCount > 0" class="home-today__overdue">
+                逾期 {{ todayPlan.overdueCount }} 道
+              </span>
+              <span>新题 {{ todayPlan.newCount }} 道</span>
+              <span>约 {{ todayPlan.estimatedMinutes }} 分钟</span>
+            </p>
+          </template>
+          <div class="home-today__actions">
+            <el-button
+              class="home-today__action"
+              type="primary"
+              :loading="todayLoading"
+              :disabled="!todayError && todayPlan.total === 0"
+              @click="startTodayPlan"
+            >
+              {{ todayError ? '去题库' : todayPlan.total > 0 ? '开始今日计划' : '今日已清空' }}
+            </el-button>
+            <el-button class="home-today__action" link @click="goWrongBook">看错题本</el-button>
+            <el-tooltip :disabled="!isEmptyLibrary" content="题库建设中" placement="top">
+              <span class="home-today__action-wrap">
+                <el-button
+                  class="home-today__action"
+                  :disabled="isEmptyLibrary"
+                  :loading="randomLoading"
+                  @click="goRandomPractice"
+                >
+                  随机练习
+                </el-button>
+              </span>
+            </el-tooltip>
+          </div>
+        </div>
+        <div class="home-today__visual" aria-hidden="true">
+          <div class="home-today__ring">
+            <span class="home-today__ring-num">{{ todayPlan.total }}</span>
+            <span class="home-today__ring-label">今日待办</span>
+          </div>
+          <p class="home-today__hint">先消逾期，再补新题</p>
+        </div>
+      </section>
+
+      <!-- Hero（游客） -->
+      <section v-else class="home-hero">
         <div class="home-hero__copy">
           <p class="home-hero__eyebrow">CODEINTERVIEW · 面试题库</p>
           <h1 class="home-hero__title">码上记</h1>
@@ -53,6 +110,18 @@
               开始刷题
             </el-button>
             <el-button class="home-hero__action" @click="goWrongBook">看看我的错题</el-button>
+            <el-tooltip :disabled="!isEmptyLibrary" content="题库建设中" placement="top">
+              <span class="home-hero__action-wrap">
+                <el-button
+                  class="home-hero__action"
+                  :disabled="isEmptyLibrary"
+                  :loading="randomLoading"
+                  @click="goRandomPractice"
+                >
+                  随机练习
+                </el-button>
+              </span>
+            </el-tooltip>
           </div>
         </div>
 
@@ -108,9 +177,7 @@
               class="home-category"
               :to="{ path: '/question', query: { categoryId: category.id } }"
             >
-              <span class="home-category__initial" aria-hidden="true">
-                {{ categoryInitial(category.name) }}
-              </span>
+              <CategoryIcon :name="category.name" />
               <h3 class="home-category__name">{{ category.name }}</h3>
               <p class="home-category__desc">{{ category.description }}</p>
               <span class="home-category__count">{{ category.questionCount }} 题</span>
@@ -118,6 +185,48 @@
           </div>
           <p v-else class="home-empty-line">暂无分类</p>
         </section>
+
+        <section v-if="showProgress" class="home-section home-progress">
+          <div class="home-progress__info">
+            <p class="home-progress__text">
+              上次练到第 {{ progress.position }} 题，共 {{ progress.totalCount }} 题
+            </p>
+            <p class="home-progress__sub">已完成 {{ progress.completedCount }} 题</p>
+          </div>
+          <el-progress
+            class="home-progress__bar"
+            :percentage="progressPercent"
+            :stroke-width="6"
+            :show-text="false"
+          />
+          <div class="home-progress__actions">
+            <el-button
+              class="home-progress__action"
+              type="primary"
+              :loading="progressLoading"
+              @click="continuePractice"
+            >
+              继续练习
+            </el-button>
+            <el-button
+              class="home-progress__action"
+              link
+              :loading="progressLoading"
+              @click="abandonAndRestart"
+            >
+              放弃并新建
+            </el-button>
+          </div>
+        </section>
+
+        <el-dialog
+          v-model="emptyDialog"
+          title="随机练习"
+          width="calc(100% - 32px)"
+          style="max-width: 480px"
+        >
+          <EmptyState title="题库建设中，暂无可练习的题目" />
+        </el-dialog>
 
         <!-- 空库引导 -->
         <EmptyState
@@ -147,7 +256,7 @@
                 <li v-for="question in latest" :key="question.id">
                   <RouterLink
                     class="home-question"
-                    :to="{ name: 'question-detail', params: { id: question.id } }"
+                    :to="{ name: 'question-detail', params: { id: question.id }, query: { ctx: 'list', sort: 'latest' } }"
                   >
                     <DifficultyTag :value="question.difficulty" />
                     <span class="home-question__title">{{ question.title }}</span>
@@ -175,7 +284,7 @@
                 <li v-for="question in hot" :key="question.id">
                   <RouterLink
                     class="home-question"
-                    :to="{ name: 'question-detail', params: { id: question.id } }"
+                    :to="{ name: 'question-detail', params: { id: question.id }, query: { ctx: 'list', sort: 'hot' } }"
                   >
                     <DifficultyTag :value="question.difficulty" />
                     <span class="home-question__title">{{ question.title }}</span>
@@ -228,9 +337,15 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
 import { getHome } from '@/api/home'
+import { getRandomQuestion } from '@/api/question'
+import { advanceSession, createSession, getCurrentSession } from '@/api/session'
 import { useUserStore } from '@/stores/user'
 import DifficultyTag from '@/components/DifficultyTag.vue'
+import CategoryIcon from '@/components/CategoryIcon.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ErrorState from '@/components/ErrorState.vue'
 
@@ -285,6 +400,67 @@ const showContinue = computed(
 
 const ASSESS_LABELS = { 1: '掌握', 2: '模糊', 3: '不会' }
 
+// ---- 今日计划（v3.6 / 01 F-009）：待复习 + 新题，前端只展示，不参与口径计算 ----
+const todayLoading = ref(false)
+const todayPlan = computed(() => {
+  const plan = data.value ? data.value.todayPlan : null
+  const available = Boolean(plan && typeof plan === 'object')
+  const dueCount = available ? Number(plan.dueCount) || 0 : 0
+  const newCount = available ? Number(plan.newCount) || 0 : 0
+  return {
+    dueCount,
+    newCount,
+    overdueCount: available ? Number(plan.overdueCount) || 0 : 0,
+    estimatedMinutes: available ? Number(plan.estimatedMinutes) || 0 : 0,
+    total: dueCount + newCount
+  }
+})
+const todayError = computed(
+  () =>
+    !loading.value &&
+    data.value !== null &&
+    isLogin.value &&
+    (data.value.todayPlan === null || data.value.todayPlan === undefined)
+)
+
+async function startTodayPlan() {
+  if (todayLoading.value) return
+  if (todayError.value || todayPlan.value.total === 0) {
+    goQuestions()
+    return
+  }
+  todayLoading.value = true
+  try {
+    // 已有进行中的练习会话就先续做（不打断既有进度），否则按「先复习后新题」新建一组
+    const current = await getCurrentSession()
+    if (current && current.status === 1 && current.currentQuestionId) {
+      router.push({
+        name: 'question-detail',
+        params: { id: current.currentQuestionId },
+        query: { from: 'session' }
+      })
+      return
+    }
+    const created = await createSession({
+      mode: 'today',
+      size: Math.min(todayPlan.value.total, 20)
+    })
+    if (!created || !created.currentQuestionId) {
+      ElMessage.info('今日暂无可练习的题目')
+      return
+    }
+    router.push({
+      name: 'question-detail',
+      params: { id: created.currentQuestionId },
+      query: { from: 'session' }
+    })
+  } catch (error) {
+    ElMessage.error((error && error.message) || '创建今日计划失败，请稍后重试')
+  } finally {
+    todayLoading.value = false
+  }
+}
+
 function readList(key) {
   const value = data.value ? data.value[key] : null
   return Array.isArray(value) ? value : []
@@ -298,10 +474,6 @@ function formatTime(value) {
   if (!value) return ''
   const parsed = dayjs(value)
   return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm') : String(value)
-}
-
-function categoryInitial(name) {
-  return name ? String(name).slice(0, 1).toUpperCase() : '·'
 }
 
 async function loadHome() {
@@ -335,11 +507,107 @@ function goQuestion(id) {
   router.push({ name: 'question-detail', params: { id } })
 }
 
-onMounted(loadHome)
+const randomLoading = ref(false)
+const emptyDialog = ref(false)
+const session = ref(null)
+const progressLoading = ref(false)
+
+const showProgress = computed(
+  () => !loading.value && isLogin.value && session.value && session.value.status === 1
+)
+const progress = computed(() => {
+  const data = session.value
+  return {
+    position: data && typeof data.position === 'number' ? data.position : '—',
+    totalCount: data && typeof data.totalCount === 'number' ? data.totalCount : '—',
+    completedCount: data && typeof data.completedCount === 'number' ? data.completedCount : 0
+  }
+})
+const progressPercent = computed(() => {
+  const total = Number(session.value && session.value.totalCount) || 0
+  const done = Number(session.value && session.value.completedCount) || 0
+  return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
+})
+
+async function loadProgress() {
+  session.value = null
+  if (!isLogin.value) return
+  try {
+    const data = await getCurrentSession()
+    session.value = data && data.status === 1 ? data : null
+  } catch {
+    session.value = null
+  }
+}
+
+async function goRandomPractice() {
+  if (randomLoading.value || isEmptyLibrary.value) return
+  randomLoading.value = true
+  try {
+    const data = await getRandomQuestion()
+    if (!data || !data.id) {
+      emptyDialog.value = true
+      return
+    }
+    router.push({
+      name: 'question-detail',
+      params: { id: data.id },
+      query: { from: 'random' }
+    })
+  } catch (error) {
+    ElMessage.error((error && error.message) || '加载失败，请稍后重试')
+  } finally {
+    randomLoading.value = false
+  }
+}
+
+function continuePractice() {
+  const id = session.value && session.value.currentQuestionId
+  if (!id) return
+  router.push({ name: 'question-detail', params: { id }, query: { from: 'session' } })
+}
+
+async function abandonAndRestart() {
+  if (progressLoading.value || !session.value) return
+  try {
+    await ElMessageBox.confirm(
+      '放弃后当前进度将保留为历史，并新建一组练习，确定吗？',
+      '放弃并新建',
+      { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  progressLoading.value = true
+  try {
+    await advanceSession(session.value.sessionId, { action: 'abandon' })
+    const data = await createSession({})
+    session.value = null
+    if (!data || !data.currentQuestionId) {
+      emptyDialog.value = true
+      return
+    }
+    router.push({
+      name: 'question-detail',
+      params: { id: data.currentQuestionId },
+      query: { from: 'session' }
+    })
+  } catch (error) {
+    ElMessage.error((error && error.message) || '操作失败，请重试')
+  } finally {
+    progressLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadHome()
+  loadProgress()
+})
 
 // 登录态变化（如退出登录）时重新拉取，控制「继续刷」显隐与数据
 watch(isLogin, () => {
   loadHome()
+  loadProgress()
 })
 </script>
 
@@ -632,27 +900,35 @@ watch(isLogin, () => {
   line-height: var(--line-height-aux);
 }
 
-.home-categories {
+.home-categories,
+.home-loading__categories {
+  --category-min: 188px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--category-min), 1fr));
   gap: var(--space-3);
 }
 
 .home-category {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
+  min-width: 0;
   min-height: 44px;
-  padding: var(--space-5);
+  padding: var(--space-4);
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease);
 }
 
 .home-category:hover {
   border-color: var(--color-primary);
   transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .home-category:focus-visible {
@@ -660,35 +936,21 @@ watch(isLogin, () => {
   outline-offset: 2px;
 }
 
-.home-category__initial {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  color: var(--color-primary);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
-  border-radius: var(--radius-button);
-}
-
 .home-category__name {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .home-category__desc {
   display: -webkit-box;
-  min-height: calc(var(--line-height-aux) * 2);
   overflow: hidden;
   color: var(--color-text-secondary);
   font-size: var(--font-size-aux);
   line-height: var(--line-height-aux);
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .home-category__count {
@@ -930,12 +1192,6 @@ watch(isLogin, () => {
   border-radius: var(--radius-card);
 }
 
-.home-loading__categories {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
 .home-loading__cat {
   height: 152px;
   background-color: var(--color-bg-card);
@@ -1006,11 +1262,6 @@ watch(isLogin, () => {
   .home-loading__hero-visual {
     display: none;
   }
-
-  .home-categories,
-  .home-loading__categories {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 767px) {
@@ -1038,7 +1289,7 @@ watch(isLogin, () => {
 
   .home-categories,
   .home-loading__categories {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --category-min: 136px;
   }
 
   .home-category {
@@ -1067,6 +1318,248 @@ watch(isLogin, () => {
     flex: 0 0 78%;
     padding: var(--space-4);
     scroll-snap-align: start;
+  }
+}
+
+.home-hero__action-wrap {
+  display: inline-flex;
+}
+
+.home-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
+
+.home-progress__info {
+  min-width: 0;
+}
+
+.home-progress__text {
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: 600;
+}
+
+.home-progress__sub {
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+  line-height: var(--line-height-aux);
+}
+
+.home-progress__bar {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.home-progress__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.home-progress__action {
+  min-height: 44px;
+  border-radius: var(--radius-button);
+}
+
+@media (max-width: 767px) {
+  .home-hero__action-wrap {
+    display: block;
+    width: 100%;
+  }
+
+  .home-loading__actions {
+    flex-direction: column;
+  }
+
+  .home-progress {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-progress__bar {
+    flex-basis: 100%;
+  }
+
+  .home-progress__actions {
+    flex-direction: column;
+    margin-left: 0;
+  }
+
+  .home-progress__action {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* v3.7：移动端触控目标 ≥44px（分析发现今日计划按钮 32px、区块文字链 18px 偏小） */
+  .home-today__action {
+    min-height: 44px;
+  }
+
+  .home-section__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .home-today__visual {
+    gap: var(--space-3);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   今日计划卡（v3.6 / 01 F-009）
+   --------------------------------------------------------------------------- */
+.home-today {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: var(--space-6);
+  align-items: center;
+  padding: var(--space-6) var(--space-8);
+  overflow: hidden;
+  /* v3.7：行动区用暖色分区（accent），与蓝色主操作分工，形成首屏视觉焦点 */
+  background-image: linear-gradient(135deg, var(--color-accent-soft) 0%, var(--color-bg-card) 72%);
+  background-color: var(--color-bg-card);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 26%, var(--color-border));
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.home-today::before {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 88% 14%,
+    color-mix(in srgb, var(--color-accent) 16%, transparent),
+    transparent 58%
+  );
+  content: '';
+  pointer-events: none;
+}
+
+.home-today__copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.home-today__eyebrow {
+  margin-bottom: var(--space-3);
+  color: var(--color-primary);
+  font-size: var(--font-size-aux);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.home-today__title {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--font-size-h2);
+  font-weight: 700;
+  line-height: var(--line-height-h2);
+}
+
+.home-today__title em {
+  color: var(--color-primary);
+  font-style: normal;
+}
+
+.home-today__sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body);
+}
+
+.home-today__overdue {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.home-today__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.home-today__action-wrap {
+  display: inline-flex;
+}
+
+.home-today__visual {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.home-today__ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 116px;
+  height: 116px;
+  border: 5px solid color-mix(in srgb, var(--color-accent) 58%, transparent);
+  border-radius: 50%;
+}
+
+.home-today__ring-num {
+  color: var(--color-accent);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.home-today__ring-label {
+  margin-top: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-aux);
+}
+
+.home-today__hint {
+  margin: 0;
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-aux);
+}
+
+@media (max-width: 1023px) {
+  .home-today {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+    padding: var(--space-8) var(--space-6);
+  }
+
+  .home-today__visual {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--space-4);
+  }
+
+  .home-today__ring {
+    width: 84px;
+    height: 84px;
+    border-width: 4px;
+  }
+
+  .home-today__ring-num {
+    font-size: 26px;
   }
 }
 </style>

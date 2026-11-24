@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="码上记">
+  <title>码上记</title>
+
+  <!-- 底板：纯色品牌蓝。
+       不用渐变：16px 下渐变会在抗锯齿过渡带里产生色差，视觉上发灰、发糊。 -->
+  <rect width="64" height="64" rx="15" fill="#2563EB" />
+
+  <!-- 「//」注释符：代码里的注释 = 在代码上记笔记。
+       笔画 9.4（16px 下约 2.35px，不低于 2px 才不会有明显虚边）；
+       两杠中心间距 16（留出约 1.6px 缝隙，加粗后不粘连）；
+       斜度 dx=7，比原先更陡，减少斜向抗锯齿。 -->
+  <g stroke="#FFFFFF" stroke-width="9.4" stroke-linecap="round">
+    <path d="M27.5 15.5 L20.5 48.5" />
+    <path d="M43.5 15.5 L36.5 48.5" />
+  </g>
+</svg>

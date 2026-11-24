@@ -6,6 +6,17 @@ import { registerNavHandlers } from '@/utils/request'
 const routes = [
   {
     path: '/',
+    name: 'landing',
+    component: () => import('@/views/Landing.vue'),
+    meta: {
+      title: '把面试题刷成自己的体系',
+      requiresAuth: false,
+      requiresAdmin: false,
+      marketing: true
+    }
+  },
+  {
+    path: '/home',
     name: 'home',
     component: () => import('@/views/Home.vue'),
     meta: { title: '首页', requiresAuth: false, requiresAdmin: false }
@@ -19,8 +30,31 @@ const routes = [
   {
     path: '/question/:id',
     name: 'question-detail',
-    component: () => import('@/views/QuestionDetail.vue'),
-    meta: { title: '题目详情', requiresAuth: false, requiresAdmin: false }
+    // v4.2：外层换成三栏练习页（左：最近浏览 / 中：原有详情 / 右：本题目录）。
+    // QuestionDetail.vue 本身未改业务逻辑，仍由 QuestionPractice 内嵌渲染。
+    component: () => import('@/views/QuestionPractice.vue'),
+    // v4.2：三栏工作台需要比 1200px 更宽，走应用态骨架（取消全局限宽与页脚）；
+    // 宽度上限由 QuestionPractice 自己的 --qp-max 接管。
+    meta: { title: '题目练习', requiresAuth: false, requiresAdmin: false, fullBleed: true }
+  },
+  // v4.16：标签索引页已下线（标签仍作为题库的数据维度保留在筛选器与管理端）。
+  // 旧地址统一重定向到首页，避免用户收藏的 /tags 落到 404 或空白页。
+  {
+    path: '/tags',
+    redirect: '/home',
+    meta: { title: '首页', requiresAuth: false, requiresAdmin: false }
+  },
+  {
+    path: '/paths',
+    name: 'paths',
+    component: () => import('@/views/Paths.vue'),
+    meta: { title: '刷题路线', requiresAuth: false, requiresAdmin: false }
+  },
+  {
+    path: '/paths/:id',
+    name: 'path-detail',
+    component: () => import('@/views/PathDetail.vue'),
+    meta: { title: '路线详情', requiresAuth: false, requiresAdmin: false }
   },
   {
     path: '/login',
@@ -59,6 +93,22 @@ const routes = [
     meta: { title: '个人中心', requiresAuth: true, requiresAdmin: false }
   },
   {
+    path: '/assistant',
+    name: 'assistant',
+    component: () => import('@/views/Assistant.vue'),
+    // v3.22：聊天页采用「应用态」骨架（全宽 + 隐藏页脚），对齐豆包式布局；
+    // 全局顶栏保留，用户仍可一键回到题库/错题本。
+    meta: { title: 'AI 助手', requiresAuth: true, requiresAdmin: false, fullBleed: true }
+  },
+  {
+    path: '/assistant/settings',
+    name: 'assistant-settings',
+    component: () => import('@/views/AssistantSettings.vue'),
+    // v3.23：与 /assistant 同用「应用态」骨架 —— 否则从对话点进来会突然出现页脚、
+    // 内容被限宽到 1200px，观感像跳到了另一个站点。
+    meta: { title: '模型配置', requiresAuth: true, requiresAdmin: false, fullBleed: true }
+  },
+  {
     path: '/admin',
     redirect: '/admin/questions',
     meta: { title: '管理端', requiresAuth: true, requiresAdmin: true }
@@ -80,6 +130,12 @@ const routes = [
     name: 'admin-taxonomy',
     component: () => import('@/views/admin/AdminTaxonomy.vue'),
     meta: { title: '分类与标签', requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/ai',
+    name: 'admin-ai',
+    component: () => import('@/views/admin/AdminAiSettings.vue'),
+    meta: { title: 'AI 站点配置', requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/403',
@@ -148,14 +204,19 @@ router.beforeEach(async (to) => {
     }
   }
 
-  // 4) 管理员路由
+  // 4) 已登录访问营销首页：回到练习首页
+  if (userStore.isLogin && to.path === '/') {
+    return { path: '/home' }
+  }
+
+  // 5) 管理员路由
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
     return { path: '/403' }
   }
 
-  // 5) 已登录访问登录 / 注册页
+  // 6) 已登录访问登录 / 注册页
   if (userStore.isLogin && (to.path === '/login' || to.path === '/register')) {
-    return { path: '/' }
+    return { path: '/home' }
   }
 
   return true
